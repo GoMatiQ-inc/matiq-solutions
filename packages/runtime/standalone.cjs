@@ -8,7 +8,8 @@ async function launch({ root, profile }) {
   if (profile) app.setPath("userData", profile);
   if (!app.requestSingleInstanceLock()) { app.quit(); return; }
   await app.whenReady();
-  const lease = await acquireToolLease({ root:path.join(app.getPath("appData"),"MatiQ Solutions","tool-locks"),id:manifest.id,owner:app.getName() });
+  const leaseRoot=path.join(app.getPath("appData"),"MatiQ Solutions","tool-locks");
+  const lease = await acquireToolLease({ root:leaseRoot,id:manifest.id,owner:app.getName() });
   const dataDir = app.getPath("userData");
   await fs.mkdir(dataDir, { recursive: true, mode: 0o700 });
   const window = new BrowserWindow({
@@ -23,7 +24,7 @@ async function launch({ root, profile }) {
   const requireFrame=require("./trusted-frame.cjs").frameGuard(contents,path.join(root,manifest.workspace));
   const host={
     window,view:{webContents:contents},session:contents.session,dataDir,resourceDir:root,manifest,
-    protectedRoots:[root,dataDir],
+    protectedRoots:[root,dataDir,leaseRoot],
     handle(channel,fn){
       if(typeof channel!=="string"||channel.startsWith("solutions:")||channels.includes(channel))throw Error("Choose a unique tool command channel.");
       ipcMain.handle(channel,async(event,...args)=>{
