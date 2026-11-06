@@ -19,7 +19,7 @@ const {
 } = require("@matiq-solutions/runtime");
 const { ToolHost } = require("@matiq-solutions/runtime/tool-host.cjs");
 const CATALOG_URL =
-  "https://github.com/GoMatiQ-inc/matiq-solutions/releases/latest/download/catalog.signed.json";
+  "https://raw.githubusercontent.com/GoMatiQ-inc/matiq-solutions/catalog/catalog.signed.json";
 async function launch(options = {}) {
   if (options.profile) app.setPath("userData", path.resolve(options.profile));
   app.setName("MatiQ Solutions");
@@ -104,6 +104,7 @@ async function launch(options = {}) {
     emit: (event) => send(event),
   });
   const uiURL = pathToFileURL(path.join(__dirname, "ui/index.html")).href;
+  const requireFrame = require("@matiq-solutions/runtime/trusted-frame.cjs").frameGuard(window.webContents,path.join(__dirname,"ui/index.html"));
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (e) => e.preventDefault());
   session.defaultSession.setPermissionRequestHandler((_wc, _p, cb) =>
@@ -112,6 +113,21 @@ async function launch(options = {}) {
   function announce(message) {
     activity = message;
     send({ type: "activity", message });
+  }
+  let appUpdate = { status: "idle", message: "Check for a newer signed suite release." }, updater;
+  function appUpdater() {
+    if (!app.isPackaged) throw Error("App updates are available in the installed signed release.");
+    if (updater) return updater;
+    updater = require("electron-updater").autoUpdater;
+    updater.autoDownload = false;
+    updater.autoInstallOnAppQuit = false;
+    updater.on("checking-for-update",()=>{appUpdate={status:"checking",message:"Checking suite releases…"};send();});
+    updater.on("update-available",info=>{appUpdate={status:"available",version:info.version,message:`Suite ${info.version} is available to download.`};send();});
+    updater.on("update-not-available",()=>{appUpdate={status:"current",message:"Your suite is up to date."};send();});
+    updater.on("download-progress",progress=>{appUpdate={...appUpdate,status:"downloading",message:`Downloading suite update · ${Math.round(progress.percent)}%`};send();});
+    updater.on("update-downloaded",info=>{appUpdate={status:"ready",version:info.version,message:`Suite ${info.version} is downloaded. Restart when your work is finished.`};send();});
+    updater.on("error",error=>{quitting=false;appUpdate={status:"error",message:error.message};announce("Suite update: "+error.message);});
+    return updater;
   }
   async function refreshCatalog() {
     const response = await fetch(CATALOG_URL, {
@@ -204,12 +220,7 @@ async function launch(options = {}) {
     return available;
   }
   ipcMain.handle("solutions:request", async (event, name, args = {}) => {
-    if (
-      event.sender !== window.webContents ||
-      event.senderFrame !== window.webContents.mainFrame ||
-      event.senderFrame.url !== uiURL
-    )
-      throw Error("Suite operations are restricted to the suite window.");
+    await requireFrame(event);
     if (typeof name !== "string" || JSON.stringify(args).length > 10000)
       throw Error("Invalid suite request.");
     switch (name) {
@@ -226,6 +237,7 @@ async function launch(options = {}) {
           activity,
           running: await host.status(),
           selected: host.selected,
+          appUpdate,
           updates: updatesFor(installed, catalog, store.target),
         };
       }
@@ -238,6 +250,13 @@ async function launch(options = {}) {
         return true;
       case "open":
         return host.open(args.id);
+      case "close":
+        await host.close(args.id);
+        return true;
+      case "rollback":
+        await host.close(args.id);
+        await store.rollback(args.id);
+        return true;
       case "hide":
         host.hide();
         return true;
@@ -266,12 +285,23 @@ async function launch(options = {}) {
         app.quit();
         return { requested: true };
       case "app.update.check":
-        if (!app.isPackaged)
-          throw Error(
-            "App updates are available in the installed signed release.",
-          );
-        await require("electron-updater").autoUpdater.checkForUpdates();
+        if (["checking","downloading","ready"].includes(appUpdate.status)) throw Error("Finish the current suite update before checking again.");
+        await appUpdater().checkForUpdates();
         return true;
+      case "app.update.download":
+        if (appUpdate.status !== "available") throw Error("Check for an available suite update first.");
+        appUpdate={...appUpdate,status:"downloading",message:"Starting suite update download…"};
+        send();
+        await appUpdater().downloadUpdate();
+        return true;
+      case "app.update.install":
+        if (appUpdate.status !== "ready") throw Error("Download the suite update before restarting.");
+        if (downloadController || store.busy) throw Error("Finish tool downloads before installing the suite update.");
+        await host.dispose();
+        quitting=true;
+        try { appUpdater().quitAndInstall(false,true); }
+        catch(error) { quitting=false;throw error; }
+        return {requested:true};
       default:
         throw Error("Unknown suite operation.");
     }

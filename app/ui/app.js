@@ -96,6 +96,10 @@ function card(tool, installed) {
         true,
       ),
     );
+    const running=state.running.some(item=>item.id===tool.id);
+    if(running)row.append(button("Close",()=>api.request("close",{id:tool.id})));
+    row.append(button(tool.enabled===false?"Enable":"Disable",()=>api.request("enable",{id:tool.id,enabled:tool.enabled===false})));
+    if(tool.previous)row.append(button("Roll back",async()=>{if(window.confirm("Return to the retained previous tool version? Your projects will be kept."))await api.request("rollback",{id:tool.id});}));
     if (tool.pending)
       row.append(element("span", "Update downloaded · restart required"));
     row.append(
@@ -250,7 +254,10 @@ function render() {
         "Projects and models stay on this computer. Uninstalling tools preserves your work.",
       ),
       element("p", "Suite version " + state.version + " · " + state.target),
+      element("p",state.appUpdate.message,"caption"),
       button("Check for app updates", () => api.request("app.update.check")),
+      ...(state.appUpdate.status==="available"?[button("Download app update",()=>api.request("app.update.download"))]:[]),
+      ...(state.appUpdate.status==="ready"?[button("Restart to update app",()=>api.request("app.update.install"))]:[]),
     );
   }
 }

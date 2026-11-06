@@ -1,9 +1,10 @@
-const { WebContentsView, session, ipcMain } = require("electron");
+const { app, WebContentsView, session, ipcMain } = require("electron");
 const fs = require("node:fs/promises"),
   path = require("node:path");
 const { frameGuard } = require("./trusted-frame.cjs");
 class ToolHost {
   constructor({ window, store, dataRoot, emit, sharedModelRoot }) {
+    this.leaseRoot = path.join(app.getPath("appData"), "MatiQ Solutions", "tool-locks");
     this.window = window;
     this.store = store;
     this.dataRoot = dataRoot;
@@ -45,6 +46,7 @@ class ToolHost {
         if (this.opening.get(id) === opening) this.opening.delete(id);
       }
     }
+    if (this.running.get(id)?.activationFailed) throw Error("Tool startup cleanup is incomplete. Close the tool to retry cleanup before reopening.");
     this.selected = id;
     this.layout();
     return { id };
@@ -107,7 +109,8 @@ class ToolHost {
       });
       handlers.push(channel);
     };
-    const cleanup = () => {
+    let lease;
+    const cleanup = async () => {
       for (const channel of handlers) ipcMain.removeHandler(channel);
       for (const [emitter, event, fn] of listeners)
         emitter.removeListener(event, fn);
@@ -118,6 +121,7 @@ class ToolHost {
       ownSession.setDisplayMediaRequestHandler(null);
       if (!contents.isDestroyed()) contents.close();
       this.window.contentView.removeChildView(view);
+      await lease?.release();
     };
     const context = {
       window: this.window,
@@ -156,6 +160,7 @@ class ToolHost {
     };
     let instance;
     try {
+      lease = await require("./tool-lease.cjs").acquireToolLease({root:this.leaseRoot,id,owner:app.getName()});
       await fs.mkdir(dataDir, { recursive: true, mode: 0o700 });
       const adapter = require(path.join(record.directory, m.adapter));
       if (typeof adapter.activate !== "function")
@@ -167,12 +172,7 @@ class ToolHost {
         typeof instance.dispose !== "function"
       )
         throw Error("Tool must provide status() and dispose().");
-      await contents.insertCSS(
-        await fs.readFile(
-          require("@matiq-solutions/shell").suiteStylesheet,
-          "utf8",
-        ),
-      );
+      await require("@matiq-solutions/shell").apply(contents,{suite:true});
       this.running.set(id, {
         id,
         name: m.name,
@@ -185,11 +185,15 @@ class ToolHost {
         },
       });
     } catch (error) {
-      try {
-        await instance?.dispose?.();
-      } finally {
-        cleanup();
+      try { await instance?.dispose?.(); }
+      catch (shutdownError) {
+        // Keep the instance and ownership: another host must not acquire its
+        // native hooks while failed cleanup may still have live helpers.
+        this.running.set(id, { id, name:m.name, view, instance, cleanup, requests,
+          setClosing:value=>{closing=value;}, activationFailed:true });
+        throw Error(`Tool startup failed (${error.message}) and cleanup needs retry (${shutdownError.message}). Close this tool to retry cleanup before reopening.`);
       }
+      await cleanup();
       throw error;
     }
   }
@@ -244,7 +248,7 @@ class ToolHost {
     if (!t) return;
     try {
       await t.instance.dispose();
-      t.cleanup();
+      await t.cleanup();
       this.running.delete(id);
       if (this.selected === id) this.selected = null;
       this.layout();
@@ -256,15 +260,24 @@ class ToolHost {
   async dispose() {
     const prepared = [];
     try {
-      for (const id of this.running.keys()) {
-        const tool = await this.prepareClose(id);
-        if (tool) prepared.push(tool);
+      // Check every tool before gating any IPC: a later busy recording must
+      // not interrupt commands or dirty-state notifications in earlier tools.
+      await this.assertIdle();
+      for (const tool of this.running.values()) {
+        if (tool.requests.size) throw Error(`Wait for ${tool.name}'s current request to finish.`);
+      }
+      for (const tool of this.running.values()) {
+        tool.setClosing(true);
+        prepared.push(tool);
       }
       for (const tool of prepared) {
         await tool.instance.dispose();
-        tool.cleanup();
+        await tool.cleanup();
         this.running.delete(tool.id);
       }
+      this.selected = null;
+      this.layout();
+      this.emit();
     } catch (error) {
       for (const t of this.running.values()) t.setClosing(false);
       throw error;

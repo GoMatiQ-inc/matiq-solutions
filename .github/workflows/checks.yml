@@ -1,5 +1,6 @@
 name: Desktop foundation checks
 on:
+  workflow_call:
   push:
     branches: [main, 'codex/**']
   pull_request:

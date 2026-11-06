@@ -2,6 +2,8 @@
 const fs = require("node:fs/promises"),
   path = require("node:path");
 const { pack, validateManifest } = require("./index.cjs");
+const sdkVersion = require("./package.json").version;
+const sdkAsset = name => `https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v${sdkVersion}/matiq-solutions-${name}-${sdkVersion}.tgz`;
 async function create(
   destination,
   { id = "com.matiq.newtool", name = "New tool" } = {},
@@ -30,6 +32,7 @@ async function create(
   validateManifest(manifest);
   await fs.mkdir(destination, { recursive: false });
   await fs.mkdir(path.join(destination, "src"));
+  const title = name.replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
   const files = {
     "matiq-tool.json": JSON.stringify(manifest, null, 2) + "\n",
     "package.json":
@@ -47,11 +50,11 @@ async function create(
             "tool:pack": "matiq-tool pack --output tool.mqt",
           },
           dependencies: {
-            "@matiq-solutions/runtime": "0.1.0",
-            "@matiq-solutions/shell": "0.1.0",
+            "@matiq-solutions/runtime": sdkAsset("runtime"),
+            "@matiq-solutions/shell": sdkAsset("shell"),
           },
           devDependencies: {
-            "@matiq-solutions/sdk": "0.1.0",
+            "@matiq-solutions/sdk": sdkAsset("sdk"),
             electron: "45.2.3",
             "electron-builder": "26.18.0",
           },
@@ -88,9 +91,9 @@ exports.activate=async host=>{
  return {status:async()=>{const current=await host.view.webContents.executeJavaScript("document.querySelector('textarea').value");return {busy:saving||current!==savedText,reason:saving?'saving document':current!==savedText?'save your document first':''};},dispose:async()=>{}};
 };`,
     "src/index.html":
-      '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\'; connect-src \'none\'; object-src \'none\'; base-uri \'none\'"><title>Local workspace</title><link rel="stylesheet" href="style.css"></head><body><h1>Local workspace</h1><p>A tool in its own repository. Your document stays on this device.</p><textarea aria-label="Document"></textarea><button id="save">Save document</button><p id="status" role="status"></p><script src="app.js"></script></body></html>',
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\'; connect-src \'none\'; object-src \'none\'; base-uri \'none\'"><title>' + title + '</title><link rel="stylesheet" href="style.css"></head><body><aside class="sidebar"><div class="brand"><img src="../node_modules/@matiq-solutions/shell/assets/matiq-solutions-wordmark-dark.png" alt="MatiQ Solutions"><span>' + title + '</span></div><nav aria-label="Main navigation"><button class="active" aria-current="page">Document</button></nav><div class="sidebar-foot"><strong>On your device</strong><span>Your files stay local.</span></div></aside><div class="workspace"><header><h1>Document</h1></header><main><h2>Your local workspace.</h2><p>A tool in its own repository. Your document stays on this device.</p><textarea aria-label="Document"></textarea><button id="save">Save document</button><p id="status" role="status"></p></main><footer>By MatiQ Solutions<span>Your work. Your device.</span></footer></div><script src="app.js"></script></body></html>',
     "src/style.css":
-      "body{font:16px/1.5 sans-serif;margin:32px;color:#1b1d21}textarea{display:block;width:100%;height:260px;margin:24px 0;font:inherit}button{font:inherit;padding:10px 18px}",
+      "textarea{display:block;width:100%;height:260px;margin:24px 0;font:inherit}button{font:inherit;padding:10px 18px}",
     "src/app.js": `const text=document.querySelector('textarea'),status=document.querySelector('#status'),save=document.querySelector('#save');
 text.disabled=true;save.disabled=true;
 window.tool.request('load').then(value=>{text.value=value;text.disabled=false;save.disabled=false;}).catch(e=>status.textContent='Document could not be loaded. Reopen the tool before editing: '+e.message);
@@ -129,6 +132,18 @@ async function main(args) {
     console.log("Tool manifest and entry files are valid.");
     return;
   }
+  if (command === "pack-app") {
+    if (!process.env.MATIQ_TOOL_SIGNING_KEY) throw Error("Supply MATIQ_TOOL_SIGNING_KEY through the release signing environment.");
+    const result = await require("./package-app.cjs").packApp({
+      resources: path.resolve(value("--resources")), manifest, target: value("--target"),
+      extra: args.includes("--extra") ? value("--extra").split(",") : [],
+      output: path.resolve(value("--output")), url: value("--url"),
+      privateKey: process.env.MATIQ_TOOL_SIGNING_KEY,
+      publisher: process.env.MATIQ_TOOL_PUBLISHER || "matiq-solutions-release-v1",
+    });
+    console.log(JSON.stringify(result));
+    return;
+  }
   if (command === "pack") {
     if (!process.env.MATIQ_TOOL_SIGNING_KEY)
       throw Error(
@@ -150,7 +165,7 @@ async function main(args) {
     console.log(JSON.stringify(result));
     return;
   }
-  throw Error("Use create, validate or pack.");
+  throw Error("Use create, validate, pack or pack-app.");
 }
 if (require.main === module)
   main(process.argv.slice(2)).catch((e) => {

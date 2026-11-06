@@ -9,12 +9,16 @@
     "*.html",
     "assets",
     "templates",
-    "LICENSE"
+    "LICENSE",
+    "*.d.ts",
+    "README.md"
   ],
   "dependencies": {
-    "adm-zip": "0.6.1"
+    "adm-zip": "0.6.1",
+    "@electron/asar": "3.4.1"
   },
   "bin": {
     "matiq-tool": "cli.cjs"
-  }
+  },
+  "types": "index.d.ts"
 }

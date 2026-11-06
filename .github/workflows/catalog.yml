@@ -1,0 +1,57 @@
+name: Refresh signed marketplace
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: marketplace-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    environment: catalog-signing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - name: Verify tool releases and sign catalog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MATIQ_TOOL_SIGNING_KEY: ${{ secrets.MATIQ_TOOL_SIGNING_KEY }}
+        run: node scripts/catalog.cjs "$RUNNER_TEMP/catalog.signed.json"
+      - name: Publish metadata branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          destination="$RUNNER_TEMP/marketplace-publish"
+          mkdir "$destination"
+          cd "$destination"
+          git init
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          if git ls-remote --exit-code --heads origin catalog > /dev/null; then
+            git fetch --depth=1 origin catalog
+            git checkout -b catalog FETCH_HEAD
+          else
+            status=$?
+            if [ "$status" -ne 2 ]; then exit "$status"; fi
+            git checkout --orphan catalog
+          fi
+          cp "$RUNNER_TEMP/catalog.signed.json" catalog.signed.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add catalog.signed.json
+          git commit -m 'Refresh verified tool marketplace'
+          git push origin HEAD:catalog

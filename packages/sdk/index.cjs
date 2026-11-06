@@ -39,11 +39,12 @@ function safePath(name) {
     throw Error("Package contains an unsafe path. Rebuild the tool package.");
   return name;
 }
+const validToolId = value => typeof value === "string" && /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$/.test(value);
 function validateManifest(m) {
   if (
     !m ||
     m.schema !== 1 ||
-    !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$/.test(m.id) ||
+    !validToolId(m.id) ||
     !/^\d+\.\d+\.\d+$/.test(m.version) ||
     typeof m.name !== "string" ||
     !m.name.trim() ||
@@ -270,6 +271,7 @@ module.exports = {
   hash,
   safePath,
   validateManifest,
+  validToolId,
   sign,
   verify,
   pack,
