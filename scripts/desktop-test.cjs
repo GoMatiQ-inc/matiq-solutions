@@ -63,6 +63,7 @@ const {
         timeout: 30000,
       });
       owned = captureTree(capture(app.process()));
+      app.context().on("page", p => p.on("pageerror", error => console.error("Fixture renderer error:", error.message)));
       const page = await app.firstWindow();
       page.setDefaultTimeout(15000);
       return page;
@@ -203,6 +204,9 @@ const {
       "PASS: separate SDK tool, empty suite, explicit install, local document, staged update, restart persistence, uninstall preservation.",
     );
     await close();
+  } catch(error) {
+    if(app){try{const pages=[];for(const page of app.context().pages())pages.push({url:page.url(),text:(await page.locator('body').innerText()).slice(-6000)});console.error('Fixture page diagnostics:',JSON.stringify(pages));}catch(diagnostic){console.error('Fixture diagnostics unavailable:',diagnostic.message);}}
+    throw error;
   } finally {
     clearTimeout(watchdog);
     if (app) {

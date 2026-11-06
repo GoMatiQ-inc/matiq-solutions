@@ -317,7 +317,7 @@ async function launch(options = {}) {
   });
   return { window, store, host };
 }
-if (require.main === module)
+if (app.getAppPath() === path.resolve(__dirname, '..'))
   launch().catch((e) => {
     dialog.showErrorBox("MatiQ Solutions could not start", e.message);
     app.quit();
