@@ -1,0 +1,24 @@
+{
+  "name": "@matiq-solutions/sdk",
+  "version": "0.1.0",
+  "main": "index.cjs",
+  "license": "SEE LICENSE IN LICENSE",
+  "files": [
+    "*.cjs",
+    "*.css",
+    "*.html",
+    "assets",
+    "templates",
+    "LICENSE",
+    "*.d.ts",
+    "README.md"
+  ],
+  "dependencies": {
+    "adm-zip": "0.6.1",
+    "@electron/asar": "3.4.1"
+  },
+  "bin": {
+    "matiq-tool": "cli.cjs"
+  },
+  "types": "index.d.ts"
+}

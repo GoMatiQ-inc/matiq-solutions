@@ -1,0 +1,15 @@
+{
+  "name": "@matiq-solutions/shell",
+  "version": "0.1.0",
+  "main": "index.cjs",
+  "license": "SEE LICENSE IN LICENSE",
+  "files": [
+    "*.cjs",
+    "*.css",
+    "*.html",
+    "assets",
+    "templates",
+    "LICENSE"
+  ],
+  "dependencies": {}
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@matiq-solutions/runtime",
+  "version": "0.1.0",
+  "main": "index.cjs",
+  "license": "SEE LICENSE IN LICENSE",
+  "files": [
+    "*.cjs",
+    "*.css",
+    "*.html",
+    "assets",
+    "templates",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@matiq-solutions/sdk": "0.1.0",
+    "@matiq-solutions/shell": "0.1.0"
+  }
+}

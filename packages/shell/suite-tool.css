@@ -1,0 +1,39 @@
+.sidebar {
+  position: static !important;
+  width: auto !important;
+  inset: auto !important;
+  padding: 10px 20px !important;
+  background: #fff !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid var(--rule) !important;
+  display: block !important;
+}
+.sidebar .brand,
+.sidebar .sidebar-foot,
+.sidebar .sidebar-bottom {
+  display: none !important;
+}
+.sidebar nav {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+}
+.sidebar nav button {
+  padding: 8px 14px !important;
+}
+.workspace {
+  margin-left: 0 !important;
+  width: 100% !important;
+  min-height: 0 !important;
+}
+body {
+  display: block !important;
+  min-height: 0 !important;
+}
+.workspace > header,
+.workspace > footer {
+  display: none !important;
+}
+.workspace > main {
+  min-height: 0 !important;
+}

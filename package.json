@@ -1,0 +1,87 @@
+{
+  "name": "matiq-solutions",
+  "productName": "MatiQ Solutions",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local tools, installed by you.",
+  "author": "MatiQ Inc",
+  "license": "SEE LICENSE IN LICENSE",
+  "main": "app/main.cjs",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "test:desktop": "node scripts/desktop-test.cjs",
+    "package:dir": "electron-builder --dir --publish never",
+    "package": "electron-builder --publish never"
+  },
+  "dependencies": {
+    "@matiq-solutions/sdk": "0.1.0",
+    "@matiq-solutions/runtime": "0.1.0",
+    "@matiq-solutions/shell": "0.1.0",
+    "electron-updater": "6.8.9"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
+    "playwright": "1.64.1"
+  },
+  "build": {
+    "appId": "com.matiq.solutions",
+    "asar": true,
+    "files": [
+      "app/**/*",
+      "packages/**/*",
+      "catalog/**/*",
+      "package.json",
+      "LICENSE",
+      "NOTICE"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "target": [
+        "pkg",
+        "zip"
+      ],
+      "minimumSystemVersion": "14.2",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Installed Voice records audio only when you start recording.",
+        "NSAudioCaptureUsageDescription": "Installed Voice captures local meeting audio only when you start recording.",
+        "NSScreenCaptureUsageDescription": "Installed tools observe the screen only after your approval.",
+        "NSAppleEventsUsageDescription": "Installed tools control applications only after your approval."
+      },
+      "artifactName": "MatiQ-Solutions-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "MatiQ-Solutions-${version}-windows-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "asarUnpack": [
+      "node_modules/**/*.node",
+      "node_modules/**/*.dylib",
+      "node_modules/**/*.dll"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "GoMatiQ-inc",
+        "repo": "matiq-solutions"
+      }
+    ]
+  }
+}
