@@ -1,0 +1,10 @@
+{
+  "signed": {
+    "schema": 1,
+    "sequence": 1794008456041,
+    "expires": "2026-11-13T23:40:56.041Z",
+    "tools": []
+  },
+  "publisher": "matiq-solutions-release-v1",
+  "signature": "qSKwdOxR+WP2BMzV6mgMgDPn92Cf3iZQk4Ik1lLNEFWphkAlo72YIO4YQPNHNi+TtgCa59LIRDWFsI9kurdABQ=="
+}
