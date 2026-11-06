@@ -72,11 +72,11 @@ const {
       catalog: { schema: 1, sequence: 1, tools: [entries[0]] },
       packages,
     };
-    async function launch() {
+    async function launch(entry = "desktop-entry.cjs") {
       await fs.writeFile(configFile, JSON.stringify(config));
       app = await electron.launch({
         executablePath:require("electron"),
-        args: [path.join(__dirname, "desktop-entry.cjs")],
+        args: [path.join(__dirname, entry)],
         env: { ...process.env, MATIQ_FIXTURE_CONFIG: configFile },
         timeout: 30000,
       });
@@ -296,6 +296,25 @@ const {
       "PASS: separate SDK tool, empty suite, explicit install, local document, staged update, restart persistence, uninstall preservation.",
     );
     await close();
+    config.root=source;config.profile=path.join(root,"standalone-profile");
+    page=await launch("standalone-entry.cjs");
+    await page.getByLabel("Document",{exact:true}).fill("Saved from the SDK standalone host.");
+    await page.getByRole("button",{name:"Save document"}).click();
+    await page.getByText("Saved on this device.",{exact:true}).waitFor();
+    for(let i=0;i<100;i++){if(await app.evaluate(()=>Boolean(globalThis.fixtureStandalone)))break;await new Promise(resolve=>setTimeout(resolve,50));}
+    await app.evaluate(()=>{
+      const tool=globalThis.fixtureStandalone,original=tool.instance.status;let edited=false;
+      tool.instance.status=async()=>{const snapshot=await original();if(!edited){edited=true;await tool.window.webContents.executeJavaScript("document.querySelector('textarea').value='An edit arriving during the close check.'");}return snapshot;};
+    });
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].close());
+    for(let i=0;i<100;i++){if(await app.evaluate(()=>Boolean(globalThis.fixtureCloseError)))break;await new Promise(resolve=>setTimeout(resolve,50));}
+    assert.match(await app.evaluate(()=>globalThis.fixtureCloseError),/save your document/);
+    assert.equal(await page.evaluate(()=>document.documentElement.inert),false);
+    assert.equal(await page.getByLabel("Document",{exact:true}).inputValue(),"An edit arriving during the close check.");
+    await page.getByRole("button",{name:"Save document"}).click();await page.getByText("Saved on this device.",{exact:true}).waitFor();
+    assert.equal(await fs.readFile(path.join(config.profile,"document.txt"),"utf8"),"An edit arriving during the close check.");
+    await close();
+    console.log("PASS: SDK standalone saves locally and refuses a final edit arriving during shutdown.");
   } catch (error) {
     if (app) {
       try {

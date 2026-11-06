@@ -2,7 +2,7 @@ import type { BrowserWindow, WebContentsView, Session } from "electron";
 export interface ToolManifest {
   schema: 1; id: string; name: string; description?: string; version: string;
   sdk: 1; dataVersion: number; runtime: "electron-45.2.3";
-  targets: Array<"darwin-arm64" | "darwin-x64" | "win32-x64" | "win32-arm64" | "linux-x64">;
+  targets: Array<"darwin-arm64" | "darwin-x64" | "win32-x64" | "win32-arm64" | "linux-x64" | "linux-arm64">;
   capabilities: Array<"microphone" | "system-audio" | "keyboard" | "clipboard" | "files" | "network" | "computer">;
   adapter: string; workspace: string; preload: string;
 }
@@ -13,7 +13,7 @@ export interface ToolInstance {
   onVisibility?(visible: boolean): void;
 }
 export interface ToolHostContext {
-  window: BrowserWindow; view: WebContentsView; session: Session;
+  window: BrowserWindow; view: Pick<WebContentsView, "webContents">; session: Session;
   dataDir: string; resourceDir: string; sharedModelRoot?: string;
   manifest: ToolManifest; protectedRoots: string[];
   handle(channel: string, handler: (...args: any[]) => any): void;

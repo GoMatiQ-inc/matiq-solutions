@@ -47,13 +47,17 @@ async function launch({ root, profile }) {
       try{await Promise.race([Promise.allSettled([...requests]),new Promise(resolve=>{timer=setTimeout(resolve,1000);})]);}
       finally{clearTimeout(timer);}
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
-      if(!activationFailed){const state=await instance.status();if(state.busy)throw Error(state.reason||"Finish your work before quitting.");}
+      if(!activationFailed){
+        const initial=await instance.status();if(initial.busy)throw Error(initial.reason||"Finish your work before quitting.");
+        await contents.executeJavaScript("document.documentElement.inert=true");
+        const final=await instance.status();if(final.busy)throw Error(final.reason||"Finish your work before quitting.");
+      }
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
       closing=true;await instance.dispose();
       for(const channel of channels)ipcMain.removeHandler(channel);
       for(const [emitter,event,fn] of listeners)emitter.removeListener(event,fn);
       await lease.release();quitting=true;app.quit();
-    })().catch(error=>{closing=activationFailed;dialog.showErrorBox("Tool could not close",error.message);host.show();}).finally(()=>{checking=false;});
+    })().catch(async error=>{closing=activationFailed;let detail=error.message;try{if(!contents.isDestroyed())await contents.executeJavaScript("document.documentElement.inert=false");}catch(restoreError){detail+=" Window recovery failed: "+restoreError.message;}dialog.showErrorBox("Tool could not close",detail);host.show();}).finally(()=>{checking=false;});
   });
   app.on("window-all-closed",()=>app.quit());
   try {

@@ -1,6 +1,6 @@
 {
   "name": "@matiq-solutions/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "index.cjs",
   "license": "SEE LICENSE IN LICENSE",
   "files": [
@@ -15,10 +15,13 @@
   ],
   "dependencies": {
     "adm-zip": "0.6.1",
-    "@electron/asar": "3.4.1"
+    "@electron/asar": "4.3.1"
   },
   "bin": {
     "matiq-tool": "cli.cjs"
   },
-  "types": "index.d.ts"
+  "types": "index.d.ts",
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }
