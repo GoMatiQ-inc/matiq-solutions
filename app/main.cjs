@@ -101,7 +101,7 @@ async function launch(options = {}) {
     store,
     dataRoot: root,
     sharedModelRoot: options.sharedModelRoot,
-    emit: () => send(),
+    emit: (event) => send(event),
   });
   const uiURL = pathToFileURL(path.join(__dirname, "ui/index.html")).href;
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -260,10 +260,11 @@ async function launch(options = {}) {
       case "restart":
         if (downloadController || store.busy)
           throw Error("Finish tool downloads before restarting.");
-        await host.assertIdle();
+        await host.dispose();
         app.relaunch();
+        quitting = true;
         app.quit();
-        return true;
+        return { requested: true };
       case "app.update.check":
         if (!app.isPackaged)
           throw Error(
@@ -286,8 +287,14 @@ async function launch(options = {}) {
   window.on("close", (event) => {
     if (quitting) return;
     event.preventDefault();
-    app.quit();
+    host
+      .status()
+      .then((tools) =>
+        tools.some((t) => t.background) ? window.hide() : app.quit(),
+      )
+      .catch((error) => announce(error.message));
   });
+
   app.on("window-all-closed", () => app.quit());
   app.on("before-quit", (event) => {
     if (quitting) return;
@@ -318,7 +325,7 @@ async function launch(options = {}) {
   });
   return { window, store, host };
 }
-if (app.getAppPath() === path.resolve(__dirname, '..'))
+if (app.getAppPath() === path.resolve(__dirname, ".."))
   launch().catch((e) => {
     dialog.showErrorBox("MatiQ Solutions could not start", e.message);
     app.quit();

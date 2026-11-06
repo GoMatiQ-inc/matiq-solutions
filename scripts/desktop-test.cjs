@@ -26,6 +26,21 @@ const {
       id: "com.matiq.fixture",
       name: "Local document",
     });
+    const adapterFile = path.join(source, "src/tool.cjs");
+    let adapter = await fs.readFile(adapterFile, "utf8");
+    adapter = adapter.replace(
+      "let savedText='',saving=false;",
+      "let savedText='',saving=false,recording=false,chunks=0;",
+    );
+    adapter = adapter.replace(
+      "if(name==='load')",
+      "if(name==='fixture.record'){recording=true;return true;}if(name==='fixture.chunk'){if(!recording)throw Error('Fixture is not recording');return ++chunks;}if(name==='fixture.stop'){recording=false;return chunks;}if(name==='fixture.close')return host.close();if(name==='load')",
+    );
+    adapter = adapter.replace(
+      "status:async()=>{const current=",
+      "status:async()=>{if(recording)return {busy:true,reason:'recording fixture audio'};const current=",
+    );
+    await fs.writeFile(adapterFile, adapter);
     const keys = crypto.generateKeyPairSync("ed25519");
     const publicKey = keys.publicKey.export({ type: "spki", format: "pem" });
     const packages = {},
@@ -63,7 +78,13 @@ const {
         timeout: 30000,
       });
       owned = captureTree(capture(app.process()));
-      app.context().on("page", p => p.on("pageerror", error => console.error("Fixture renderer error:", error.message)));
+      app
+        .context()
+        .on("page", (p) =>
+          p.on("pageerror", (error) =>
+            console.error("Fixture renderer error:", error.message),
+          ),
+        );
       const page = await app.firstWindow();
       page.setDefaultTimeout(15000);
       return page;
@@ -138,6 +159,41 @@ const {
       ),
       "Saved through installed tool, outside the suite source.",
     );
+    await tool.evaluate(() => window.tool.request("fixture.record"));
+    const chunks = tool.evaluate(async () => {
+      let sent = 0;
+      const end = Date.now() + 400;
+      while (Date.now() < end) {
+        await window.tool.request("fixture.chunk");
+        sent++;
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      return sent;
+    });
+    await assert.rejects(
+      page.evaluate(() =>
+        window.solutions.request("uninstall", { id: "com.matiq.fixture" }),
+      ),
+      /recording|current request/,
+    );
+    assert.ok(
+      (await chunks) > 0,
+      "A rejected close must not reject recording chunks.",
+    );
+    await tool.evaluate(() => window.tool.request("fixture.stop"));
+    const closed = tool.waitForEvent("close");
+    const request = tool
+      .evaluate(() => window.tool.request("fixture.close"))
+      .catch((error) => {
+        if (!/closed/i.test(error.message)) throw error;
+      });
+    await closed;
+    await request;
+    assert.equal(
+      (await page.evaluate(() => window.solutions.request("state"))).running
+        .length,
+      0,
+    );
     await close();
     config.catalog.tools = [entries[1]];
     page = await launch();
@@ -204,8 +260,20 @@ const {
       "PASS: separate SDK tool, empty suite, explicit install, local document, staged update, restart persistence, uninstall preservation.",
     );
     await close();
-  } catch(error) {
-    if(app){try{const pages=[];for(const page of app.context().pages())pages.push({url:page.url(),text:(await page.locator('body').innerText()).slice(-6000)});console.error('Fixture page diagnostics:',JSON.stringify(pages));}catch(diagnostic){console.error('Fixture diagnostics unavailable:',diagnostic.message);}}
+  } catch (error) {
+    if (app) {
+      try {
+        const pages = [];
+        for (const page of app.context().pages())
+          pages.push({
+            url: page.url(),
+            text: (await page.locator("body").innerText()).slice(-6000),
+          });
+        console.error("Fixture page diagnostics:", JSON.stringify(pages));
+      } catch (diagnostic) {
+        console.error("Fixture diagnostics unavailable:", diagnostic.message);
+      }
+    }
     throw error;
   } finally {
     clearTimeout(watchdog);

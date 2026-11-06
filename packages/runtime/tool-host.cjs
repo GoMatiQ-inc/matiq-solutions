@@ -1,7 +1,7 @@
 const { WebContentsView, session, ipcMain } = require("electron");
 const fs = require("node:fs/promises"),
   path = require("node:path");
-const {frameGuard}=require("./trusted-frame.cjs");
+const { frameGuard } = require("./trusted-frame.cjs");
 class ToolHost {
   constructor({ window, store, dataRoot, emit, sharedModelRoot }) {
     this.window = window;
@@ -19,6 +19,7 @@ class ToolHost {
     const x = width < 850 ? 190 : 220;
     for (const [id, t] of this.running) {
       t.view.setVisible(id === this.selected);
+      t.instance.onVisibility?.(id === this.selected);
       t.view.setBounds({
         x,
         y: 84,
@@ -68,12 +69,17 @@ class ToolHost {
     const contents = view.webContents,
       handlers = [],
       listeners = [];
+    const requests = new Set();
+    let closing = false;
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
     contents.on("will-navigate", (e) => e.preventDefault());
     this.window.contentView.addChildView(view);
     view.setVisible(false);
     const dataDir = path.join(this.dataRoot, "tools", id);
-    const requireFrame=frameGuard(contents,path.join(record.directory,m.workspace));
+    const requireFrame = frameGuard(
+      contents,
+      path.join(record.directory, m.workspace),
+    );
     const handle = (channel, fn) => {
       if (
         typeof channel !== "string" ||
@@ -82,8 +88,22 @@ class ToolHost {
       )
         throw Error("Choose a unique tool command channel.");
       ipcMain.handle(channel, async (event, ...args) => {
-        await requireFrame(event);
-        return fn(...args);
+        if (closing)
+          throw Error(
+            "This tool is closing. Reopen it before starting more work.",
+          );
+        const request = (async () => {
+          await requireFrame(event);
+          if (closing)
+            throw Error("This tool is closing. Retry after reopening.");
+          return fn(...args);
+        })();
+        requests.add(request);
+        try {
+          return await request;
+        } finally {
+          requests.delete(request);
+        }
       });
       handlers.push(channel);
     };
@@ -107,6 +127,16 @@ class ToolHost {
       sharedModelRoot: this.sharedModelRoot,
       resourceDir: record.directory,
       manifest: m,
+      close: async () => {
+        setImmediate(() =>
+          this.close(id)
+            .then(() => this.emit())
+            .catch((error) =>
+              this.emit({ type: "activity", message: error.message }),
+            ),
+        );
+        return { requested: true };
+      },
       protectedRoots: [this.dataRoot, this.store.root, record.directory],
       handle,
       emit: (channel, event) => {
@@ -143,7 +173,17 @@ class ToolHost {
           "utf8",
         ),
       );
-      this.running.set(id, { id, name: m.name, view, instance, cleanup });
+      this.running.set(id, {
+        id,
+        name: m.name,
+        view,
+        instance,
+        cleanup,
+        requests,
+        setClosing: (value) => {
+          closing = value;
+        },
+      });
     } catch (error) {
       try {
         await instance?.dispose?.();
@@ -160,34 +200,75 @@ class ToolHost {
     return rows;
   }
   async assertIdle(id) {
-    await Promise.allSettled(
-      [...this.opening.entries()]
-        .filter(([key]) => !id || key === id)
-        .map(([, p]) => p),
-    );
+    if ([...this.opening.keys()].some((key) => !id || key === id))
+      throw Error(
+        "Wait for tools to finish opening before closing or restarting.",
+      );
     for (const t of this.running.values())
       if (!id || id === t.id) {
-        const s = await t.instance.status();
-        if (s.busy)
+        let timer;
+        try {
+          await Promise.race([
+            Promise.allSettled([...t.requests]),
+            new Promise((resolve) => {
+              timer = setTimeout(resolve, 1000);
+              timer.unref();
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+        if (t.requests.size)
           throw Error(
-            `Finish ${t.name}'s active work before closing or restarting: ${s.reason || "tool is busy"}`,
+            `Wait for ${t.name}'s current request to finish or cancel it.`,
+          );
+        const state = await t.instance.status();
+        if (state.busy)
+          throw Error(
+            `Finish ${t.name}'s active work before closing or restarting: ${state.reason || "tool is busy"}`,
           );
       }
   }
-  async close(id) {
+  async prepareClose(id) {
     await this.assertIdle(id);
     const t = this.running.get(id);
-    if (t) {
+    if (t?.requests.size)
+      throw Error(
+        `Wait for ${t.name}'s current request to finish or cancel it.`,
+      );
+    t?.setClosing(true);
+    return t;
+  }
+  async close(id) {
+    const t = await this.prepareClose(id);
+    if (!t) return;
+    try {
       await t.instance.dispose();
       t.cleanup();
       this.running.delete(id);
       if (this.selected === id) this.selected = null;
       this.layout();
+    } catch (error) {
+      t.setClosing(false);
+      throw error;
     }
   }
   async dispose() {
-    await this.assertIdle();
-    for (const id of [...this.running.keys()]) await this.close(id);
+    const prepared = [];
+    try {
+      for (const id of this.running.keys()) {
+        const tool = await this.prepareClose(id);
+        if (tool) prepared.push(tool);
+      }
+      for (const tool of prepared) {
+        await tool.instance.dispose();
+        tool.cleanup();
+        this.running.delete(tool.id);
+      }
+    } catch (error) {
+      for (const t of this.running.values()) t.setClosing(false);
+      throw error;
+    }
   }
 }
 module.exports = { ToolHost };

@@ -73,30 +73,29 @@ async function create(
       ":request',name,args)});\n",
     "src/tool.cjs": `const fs=require('node:fs/promises'),path=require('node:path');
 exports.activate=async host=>{
- const file=path.join(host.dataDir,'document.txt');let dirty=false,saving=false,revision=0;
+ const file=path.join(host.dataDir,'document.txt');let savedText='',saving=false;
  host.handle('${id}:request',async(name,text)=>{
-  if(name==='dirty'){revision++;dirty=true;return true;}
-  if(name==='load'){try{return await fs.readFile(file,'utf8');}catch(e){if(e.code==='ENOENT')return '';throw e;}}
+  if(name==='load'){try{savedText=await fs.readFile(file,'utf8');return savedText;}catch(e){if(e.code==='ENOENT')return '';throw e;}}
   if(name==='save'){
    if(typeof text!=='string'||text.length>1000000)throw Error('Keep the document under one million characters.');
    if(saving)throw Error('Wait for the current save.');
-   saving=true;const savedRevision=revision;
-   try{const tmp=file+'.tmp';await fs.writeFile(tmp,text,{mode:0o600});await fs.rename(tmp,file);if(revision===savedRevision)dirty=false;return true;}finally{saving=false;}
+   saving=true;
+   try{const tmp=file+'.tmp';await fs.writeFile(tmp,text,{mode:0o600});await fs.rename(tmp,file);savedText=text;return true;}finally{saving=false;}
   }
   throw Error('Unknown tool command.');
  });
  await host.view.webContents.loadFile(path.join(host.resourceDir,'src/index.html'));
- return {status:()=>({busy:dirty||saving,reason:saving?'saving document':dirty?'save your document first':''}),dispose:async()=>{}};
+ return {status:async()=>{const current=await host.view.webContents.executeJavaScript("document.querySelector('textarea').value");return {busy:saving||current!==savedText,reason:saving?'saving document':current!==savedText?'save your document first':''};},dispose:async()=>{}};
 };`,
     "src/index.html":
       '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\'; connect-src \'none\'; object-src \'none\'; base-uri \'none\'"><title>Local workspace</title><link rel="stylesheet" href="style.css"></head><body><h1>Local workspace</h1><p>A tool in its own repository. Your document stays on this device.</p><textarea aria-label="Document"></textarea><button id="save">Save document</button><p id="status" role="status"></p><script src="app.js"></script></body></html>',
     "src/style.css":
       "body{font:16px/1.5 sans-serif;margin:32px;color:#1b1d21}textarea{display:block;width:100%;height:260px;margin:24px 0;font:inherit}button{font:inherit;padding:10px 18px}",
-    "src/app.js": `const text=document.querySelector('textarea'),status=document.querySelector('#status'),save=document.querySelector('#save');let pending=Promise.resolve();
+    "src/app.js": `const text=document.querySelector('textarea'),status=document.querySelector('#status'),save=document.querySelector('#save');
 text.disabled=true;save.disabled=true;
 window.tool.request('load').then(value=>{text.value=value;text.disabled=false;save.disabled=false;}).catch(e=>status.textContent='Document could not be loaded. Reopen the tool before editing: '+e.message);
-text.oninput=()=>{pending=window.tool.request('dirty');pending.catch(e=>status.textContent=e.message);status.textContent='Unsaved changes';};
-document.querySelector('#save').onclick=async()=>{try{await pending;await window.tool.request('save',text.value);status.textContent='Saved on this device.';}catch(e){status.textContent=e.message;}};
+text.oninput=()=>status.textContent='Unsaved changes';
+save.onclick=async()=>{save.disabled=true;const snapshot=text.value;try{await window.tool.request('save',snapshot);status.textContent=text.value===snapshot?'Saved on this device.':'Unsaved changes';}catch(e){status.textContent=e.message;}finally{save.disabled=false;}};
 `,
   };
   for (const [name, data] of Object.entries(files))
