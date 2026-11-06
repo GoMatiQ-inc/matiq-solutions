@@ -16,6 +16,7 @@ const {
     source = path.join(root, "independent-tool-repository");
   let app,
     owned = [],
+    restarted = [],
     expired = false;
   const watchdog = setTimeout(() => {
     expired = true;
@@ -38,8 +39,9 @@ const {
     );
     adapter = adapter.replace(
       "status:async()=>{const current=",
-      "status:async()=>{if(recording)return {busy:true,reason:'recording fixture audio'};const current=",
+      "status:async()=>{if(globalThis.fixtureBrokenStatus)throw Error('Fixture renderer unavailable');if(recording)return {busy:true,reason:'recording fixture audio'};const current=",
     );
+    adapter=adapter.replace("dispose:async()=>{}","dispose:async()=>{if(globalThis.fixtureFailDispose){globalThis.fixtureFailDispose=false;throw Error('Fixture helper still stopping');}}");
     await fs.writeFile(adapterFile, adapter);
     const keys = crypto.generateKeyPairSync("ed25519");
     const publicKey = keys.publicKey.export({ type: "spki", format: "pem" });
@@ -73,6 +75,7 @@ const {
     async function launch() {
       await fs.writeFile(configFile, JSON.stringify(config));
       app = await electron.launch({
+        executablePath:require("electron"),
         args: [path.join(__dirname, "desktop-entry.cjs")],
         env: { ...process.env, MATIQ_FIXTURE_CONFIG: configFile },
         timeout: 30000,
@@ -116,6 +119,18 @@ const {
     await page
       .getByText("Local document installed. Choose Open.", { exact: true })
       .waitFor();
+    await app.evaluate(()=>{
+      const shell=globalThis.fixtureShell;globalThis.fixtureOriginalApply=shell.apply;
+      shell.apply=async()=>{throw Error("Fixture stylesheet unavailable");};
+      globalThis.fixtureFailDispose=true;globalThis.fixtureBrokenStatus=true;
+    });
+    await assert.rejects(page.evaluate(()=>window.solutions.request("open",{id:"com.matiq.fixture"})),/cleanup needs retry/);
+    const failed=await page.evaluate(()=>window.solutions.request("state"));
+    assert.equal(failed.running[0].recovery,true);
+    await assert.rejects(page.evaluate(()=>window.solutions.request("open",{id:"com.matiq.fixture"})),/cleanup is incomplete/);
+    await page.evaluate(()=>window.solutions.request("close",{id:"com.matiq.fixture"}));
+    assert.equal((await page.evaluate(()=>window.solutions.request("state"))).running.length,0);
+    await app.evaluate(()=>{globalThis.fixtureShell.apply=globalThis.fixtureOriginalApply;delete globalThis.fixtureBrokenStatus;});
     await page.getByRole("button", { name: "Open", exact: true }).click();
     await page.evaluate(() =>
       Promise.all([
@@ -220,7 +235,28 @@ const {
     );
     assert.equal(registry.tools[manifest.id].version, "0.1.0");
     assert.equal(registry.tools[manifest.id].pending.version, "0.1.1");
-    await close();
+    const probe=path.join(config.profile,"restart-probe.json");
+    const previousPid=app.process().pid;
+    await fs.writeFile(probe,JSON.stringify({previousPid,id:manifest.id}));
+    owned=captureTree(capture(app.process()));
+    const exited=app.waitForEvent("close");
+    await page.getByRole("button",{name:"Restart to apply updates",exact:true}).click().catch(error=>{if(!/closed/i.test(error.message))throw error;});
+    await exited;app=null;
+    for(const process of owned)await verifyStopped(process);owned=[];
+    let receipt;
+    for(let attempt=0;attempt<200;attempt++){
+      try{receipt=JSON.parse(await fs.readFile(probe+".ready","utf8"));break;}
+      catch(error){if(error.code!=="ENOENT")throw error;}
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.ok(receipt,"Restart must automatically launch a new suite process.");
+    restarted=captureTree(capture({pid:receipt.pid}));
+    assert.notEqual(receipt.pid,previousPid);
+    assert.equal(receipt.version,"0.1.1");assert.equal(receipt.pending,false);
+    await fs.writeFile(probe+".stop","");
+    for(const process of restarted)await verifyStopped(process);restarted=[];
+    await fs.rm(probe);await fs.rm(probe+".ready");await fs.rm(probe+".stop");
+    console.log("PASS: actual Restart control relaunched the suite and activated the staged tool version.");
     page = await launch();
     await page.getByText("Version 0.1.1", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Open", exact: true }).click();
@@ -277,6 +313,8 @@ const {
     throw error;
   } finally {
     clearTimeout(watchdog);
+    if(!restarted.length){try{const receipt=JSON.parse(await fs.readFile(path.join(root,"profile/restart-probe.json.ready"),"utf8"));restarted=captureTree(capture({pid:receipt.pid}));}catch(error){if(error.code!=="ENOENT")console.error("Restart cleanup inspection:",error.message);}}
+    if(restarted.length){await fs.writeFile(path.join(root,"profile/restart-probe.json.stop"),"");for(const owned of restarted){try{process.kill(owned.pid,"SIGTERM");}catch(error){if(error.code!=="ESRCH")throw error;}}for(const owned of restarted)await verifyStopped(owned);}
     if (app) {
       owned = captureTree(capture(app.process()));
       try {

@@ -189,8 +189,10 @@ class ToolHost {
       catch (shutdownError) {
         // Keep the instance and ownership: another host must not acquire its
         // native hooks while failed cleanup may still have live helpers.
+        closing=true;
         this.running.set(id, { id, name:m.name, view, instance, cleanup, requests,
-          setClosing:value=>{closing=value;}, activationFailed:true });
+          setClosing:value=>{closing=value;}, activationFailed:true,
+          failureReason:`Startup failed: ${error.message}. Close this tool to retry cleanup: ${shutdownError.message}` });
         throw Error(`Tool startup failed (${error.message}) and cleanup needs retry (${shutdownError.message}). Close this tool to retry cleanup before reopening.`);
       }
       await cleanup();
@@ -200,7 +202,7 @@ class ToolHost {
   async status() {
     const rows = [];
     for (const t of this.running.values())
-      rows.push({ id: t.id, name: t.name, ...(await t.instance.status()) });
+      rows.push({ id:t.id,name:t.name,...(t.activationFailed?{busy:true,recovery:true,reason:t.failureReason}:await t.instance.status()) });
     return rows;
   }
   async assertIdle(id) {
@@ -210,6 +212,7 @@ class ToolHost {
       );
     for (const t of this.running.values())
       if (!id || id === t.id) {
+        if(t.activationFailed)continue;
         let timer;
         try {
           await Promise.race([
@@ -233,15 +236,26 @@ class ToolHost {
           );
       }
   }
+  async freeze(tool) {
+    if(tool.activationFailed || tool.frozen!==undefined)return;
+    tool.frozen=await tool.view.webContents.executeJavaScript("(()=>{const previous=document.documentElement.inert;document.documentElement.inert=true;return previous;})()");
+  }
+  async unfreeze(tool) {
+    if(tool.frozen===undefined)return;
+    if(!tool.view.webContents.isDestroyed())await tool.view.webContents.executeJavaScript(`document.documentElement.inert=${Boolean(tool.frozen)}`);
+    delete tool.frozen;
+  }
   async prepareClose(id) {
     await this.assertIdle(id);
-    const t = this.running.get(id);
-    if (t?.requests.size)
-      throw Error(
-        `Wait for ${t.name}'s current request to finish or cancel it.`,
-      );
-    t?.setClosing(true);
-    return t;
+    const tool=this.running.get(id);
+    if(!tool)return;
+    try {
+      await this.freeze(tool);
+      await this.assertIdle(id);
+      if(!tool.activationFailed && tool.requests.size)throw Error(`Wait for ${tool.name}'s current request to finish.`);
+      tool.setClosing(true);
+      return tool;
+    } catch(error) { await this.unfreeze(tool);throw error; }
   }
   async close(id) {
     const t = await this.prepareClose(id);
@@ -253,7 +267,8 @@ class ToolHost {
       if (this.selected === id) this.selected = null;
       this.layout();
     } catch (error) {
-      t.setClosing(false);
+      t.setClosing(Boolean(t.activationFailed));
+      await this.unfreeze(t);
       throw error;
     }
   }
@@ -263,8 +278,12 @@ class ToolHost {
       // Check every tool before gating any IPC: a later busy recording must
       // not interrupt commands or dirty-state notifications in earlier tools.
       await this.assertIdle();
+      for(const tool of this.running.values())await this.freeze(tool);
+      // Once every workspace acknowledges inert, no later DOM-only edit can
+      // invalidate an earlier tool's final status snapshot.
+      await this.assertIdle();
       for (const tool of this.running.values()) {
-        if (tool.requests.size) throw Error(`Wait for ${tool.name}'s current request to finish.`);
+        if (!tool.activationFailed && tool.requests.size) throw Error(`Wait for ${tool.name}'s current request to finish.`);
       }
       for (const tool of this.running.values()) {
         tool.setClosing(true);
@@ -279,7 +298,7 @@ class ToolHost {
       this.layout();
       this.emit();
     } catch (error) {
-      for (const t of this.running.values()) t.setClosing(false);
+      for (const t of this.running.values()) { t.setClosing(Boolean(t.activationFailed));await this.unfreeze(t); }
       throw error;
     }
   }

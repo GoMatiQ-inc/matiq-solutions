@@ -36,7 +36,7 @@ async function launch({ root, profile }) {
     show(){window.show();window.focus();},
     close:async()=>{setImmediate(()=>app.quit());return {requested:true};},
   };
-  let instance,activating=true;
+  let instance,activating=true,activationFailed=false;
   app.on("second-instance",()=>host.show());app.on("activate",()=>host.show());
   window.on("close",event=>{if(quitting)return;event.preventDefault();app.quit();});
   app.on("before-quit",event=>{
@@ -47,14 +47,13 @@ async function launch({ root, profile }) {
       try{await Promise.race([Promise.allSettled([...requests]),new Promise(resolve=>{timer=setTimeout(resolve,1000);})]);}
       finally{clearTimeout(timer);}
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
-      const state=await instance.status();
-      if(state.busy)throw Error(state.reason||"Finish your work before quitting.");
+      if(!activationFailed){const state=await instance.status();if(state.busy)throw Error(state.reason||"Finish your work before quitting.");}
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
       closing=true;await instance.dispose();
       for(const channel of channels)ipcMain.removeHandler(channel);
       for(const [emitter,event,fn] of listeners)emitter.removeListener(event,fn);
       await lease.release();quitting=true;app.quit();
-    })().catch(error=>{closing=false;dialog.showErrorBox("Tool could not close",error.message);host.show();}).finally(()=>{checking=false;});
+    })().catch(error=>{closing=activationFailed;dialog.showErrorBox("Tool could not close",error.message);host.show();}).finally(()=>{checking=false;});
   });
   app.on("window-all-closed",()=>app.quit());
   try {
@@ -63,7 +62,7 @@ async function launch({ root, profile }) {
     await require("@matiq-solutions/shell").apply(contents);
     activating=false;
   } catch(error) {
-    activating=false;
+    activating=false;activationFailed=true;closing=true;
     try { await instance?.dispose?.(); }
     catch(shutdownError) { throw Error(`Tool startup failed (${error.message}) and cleanup needs retry (${shutdownError.message}). Quit the tool to retry cleanup.`); }
     for(const channel of channels)ipcMain.removeHandler(channel);
