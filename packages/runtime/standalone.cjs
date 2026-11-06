@@ -32,9 +32,7 @@ async function launch({ root, profile }) {
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
   contents.on("will-navigate", (e) => e.preventDefault());
   contents.session.setPermissionRequestHandler((_c, _p, cb) => cb(false));
-  const page = require("node:url").pathToFileURL(
-    path.join(root, manifest.workspace),
-  ).href;
+  const requireFrame=require('./trusted-frame.cjs').frameGuard(contents,path.join(root,manifest.workspace));
   const host = {
     window,
     view: { webContents: contents },
@@ -44,13 +42,8 @@ async function launch({ root, profile }) {
     manifest,
     protectedRoots: [root, dataDir],
     handle: (channel, fn) => {
-      ipcMain.handle(channel, (event, ...args) => {
-        if (
-          event.sender !== contents ||
-          event.senderFrame !== contents.mainFrame ||
-          event.senderFrame.url !== page
-        )
-          throw Error("Commands require this tool window.");
+      ipcMain.handle(channel, async (event, ...args) => {
+        await requireFrame(event);
         return fn(...args);
       });
       channels.push(channel);

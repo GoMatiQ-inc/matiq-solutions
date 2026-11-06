@@ -1,12 +1,13 @@
 const { WebContentsView, session, ipcMain } = require("electron");
 const fs = require("node:fs/promises"),
   path = require("node:path");
-const { pathToFileURL } = require("node:url");
+const {frameGuard}=require("./trusted-frame.cjs");
 class ToolHost {
-  constructor({ window, store, dataRoot, emit }) {
+  constructor({ window, store, dataRoot, emit, sharedModelRoot }) {
     this.window = window;
     this.store = store;
     this.dataRoot = dataRoot;
+    this.sharedModelRoot = sharedModelRoot;
     this.emit = emit;
     this.running = new Map();
     this.opening = new Map();
@@ -72,9 +73,7 @@ class ToolHost {
     this.window.contentView.addChildView(view);
     view.setVisible(false);
     const dataDir = path.join(this.dataRoot, "tools", id);
-    const pageURL = pathToFileURL(
-      path.join(record.directory, m.workspace),
-    ).href;
+    const requireFrame=frameGuard(contents,path.join(record.directory,m.workspace));
     const handle = (channel, fn) => {
       if (
         typeof channel !== "string" ||
@@ -82,15 +81,8 @@ class ToolHost {
         handlers.includes(channel)
       )
         throw Error("Choose a unique tool command channel.");
-      ipcMain.handle(channel, (event, ...args) => {
-        if (
-          event.sender !== contents ||
-          event.senderFrame !== contents.mainFrame ||
-          event.senderFrame.url !== pageURL
-        )
-          throw Error(
-            "This command is available only to its installed tool workspace.",
-          );
+      ipcMain.handle(channel, async (event, ...args) => {
+        await requireFrame(event);
         return fn(...args);
       });
       handlers.push(channel);
@@ -112,6 +104,7 @@ class ToolHost {
       view,
       session: ownSession,
       dataDir,
+      sharedModelRoot: this.sharedModelRoot,
       resourceDir: record.directory,
       manifest: m,
       protectedRoots: [this.dataRoot, this.store.root, record.directory],

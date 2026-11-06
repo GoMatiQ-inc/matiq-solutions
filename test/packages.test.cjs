@@ -331,3 +331,11 @@ test("a refreshed release cannot inherit consent from an older review dialog", (
     }),
   );
 });
+
+test('workspace guard accepts canonical file identity and rejects another frame/page',async t=>{
+ const root=await fixture(t),file=path.join(root,'src/index.html'),contents={mainFrame:{url:require('node:url').pathToFileURL(file).href}},event={sender:contents,senderFrame:null};event.senderFrame=contents.mainFrame;
+ const guard=require('@matiq-solutions/runtime/trusted-frame.cjs').frameGuard(contents,file);await guard(event);
+ await assert.rejects(guard({...event,sender:{}}),/trusted/);
+ contents.mainFrame.url='https://example.com/';await assert.rejects(guard(event),/local application/);
+ contents.mainFrame.url=require('node:url').pathToFileURL(path.join(root,'src/tool.cjs')).href;await assert.rejects(guard(event),/not the installed/);
+});

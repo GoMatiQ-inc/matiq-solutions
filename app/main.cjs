@@ -100,6 +100,7 @@ async function launch(options = {}) {
     window,
     store,
     dataRoot: root,
+    sharedModelRoot: options.sharedModelRoot,
     emit: () => send(),
   });
   const uiURL = pathToFileURL(path.join(__dirname, "ui/index.html")).href;
