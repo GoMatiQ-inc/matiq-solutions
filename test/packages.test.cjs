@@ -95,14 +95,13 @@ test("signed manifest cannot escape the installation directory", () => {
   ])
     assert.throws(() => sdk.safePath(f), /unsafe/);
 });
-test("packaging rejects symbolic links and filesystem path collisions", async (t) => {
-  const root = await fixture(t);
-  await fs.symlink("index.html", path.join(root, "src/link"));
-  await assert.rejects(packed(root), /symlink/);
-  await fs.unlink(path.join(root, "src/link"));
-  await fs.writeFile(path.join(root, "src/INDEX.HTML"), "collision");
-  await assert.rejects(packed(root), /collide/);
+test('packaging rejects symbolic links and archives reject case collisions',async t=>{
+ const root=await fixture(t);const link=path.join(root,'src/link');
+ await fs.symlink(process.platform==='win32'?path.join(root,'src'):'index.html',link,process.platform==='win32'?'junction':'file');
+ await assert.rejects(packed(root),/symlink/);await fs.rm(link,{recursive:true});
+ const zip=new AdmZip(await packed(root));zip.addFile('SRC/INDEX.HTML',Buffer.from('collision'));assert.throws(()=>sdk.inspect(zip.toBuffer(),trust,'linux-x64'),/duplicate paths/);
 });
+
 test("updates target installed IDs only and activate on restart", async (t) => {
   const root = await fixture(t),
     s = store(root);
@@ -185,21 +184,13 @@ test("installed file or signed inventory changes are rejected before code load",
   await fs.writeFile(f, JSON.stringify(v));
   await assert.rejects(s.loadRecord(manifest.id), /signature changed/);
 });
-test("a real filesystem failure while staging leaves the active release usable", async (t) => {
-  const root = await fixture(t),
-    s = store(root);
-  await s.install(await packed(root));
-  const b = await packed(root, { version: "1.1.0" });
-  const packages = path.join(s.root, "packages");
-  await fs.chmod(packages, 0o500);
-  try {
-    await assert.rejects(s.install(b, { update: true }), /EACCES/);
-  } finally {
-    await fs.chmod(packages, 0o700);
-  }
-  assert.equal((await s.loadRecord(manifest.id)).version, "1.0.0");
-  assert.equal((await s.state()).tools[manifest.id].pending, undefined);
+test('a failed registry commit preserves the active release and cleans staging',async t=>{
+ const root=await fixture(t),s=store(root);await s.install(await packed(root));const bytes=await packed(root,{version:'1.1.0'}),rename=fs.rename;
+ fs.rename=async(from,to)=>{if(to===s.file)throw Object.assign(Error('Filesystem has no space for the registry transaction'),{code:'ENOSPC'});return rename(from,to);};
+ try{await assert.rejects(s.install(bytes,{update:true}),/no space/);}finally{fs.rename=rename;}
+ assert.equal((await s.loadRecord(manifest.id)).version,'1.0.0');assert.equal((await s.state()).tools[manifest.id].pending,undefined);assert.equal((await fs.readdir(path.join(s.root,'packages'))).some(n=>n.startsWith('.staging-')),false);
 });
+
 test("catalog authentication, expiry and replay protections", () => {
   const signed = {
     schema: 1,
