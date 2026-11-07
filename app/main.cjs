@@ -286,8 +286,11 @@ async function launch(options = {}) {
         if(!downloadController||downloadPhase!=="downloading")throw Error("The download has finished. Wait for package verification to complete.");
         downloadController.abort();
         return {requested:true};
-      case "open":
-        return host.open(args.id);
+      case "open": {
+        announce("Opening installed tool…");
+        try{const result=await host.open(args.id);announce("Tool ready.");return result;}
+        catch(error){announce(error.message);throw error;}
+      }
       case "close":
         await host.close(args.id);
         return true;
