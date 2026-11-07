@@ -52,6 +52,31 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - name: Launch the signed packaged suite and verify explicit-install behavior
         run: npm run test:packaged
+      - name: Choose the next patch for actual signed upgrade qualification
+        id: next
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version.split('.').map((n,i)=>Number(n)+(i===2?1:0)).join('.')")" >> "$GITHUB_OUTPUT"
+      - name: Build a signed and notarized newer suite
+        run: npm run package:release
+        env:
+          SOLUTIONS_RELEASE_VERSION: ${{ steps.next.outputs.version }}
+          SOLUTIONS_RELEASE_OUTPUT: upgrade-target
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_NAME: ${{ secrets.CSC_NAME }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      - name: Verify the newer company signature and exact update ZIP
+        run: npm run test:signatures
+        env:
+          SOLUTIONS_RELEASE_VERSION: ${{ steps.next.outputs.version }}
+          SOLUTIONS_RELEASE_OUTPUT: upgrade-target
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Qualify actual download, native replacement, relaunch and retained tool data
+        run: npm run test:upgrade
+        env:
+          MATIQ_TOOL_SIGNING_KEY: ${{ secrets.MATIQ_TOOL_SIGNING_KEY }}
       - uses: actions/upload-artifact@v4
         with:
           name: signed-suite-${{ runner.arch }}
@@ -64,6 +89,13 @@ jobs:
             dist/latest-mac.yml
             dist/mac-signature.json
             dist/packaged-proof.json
+            dist/upgrade-proof.json
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: suite-upgrade-diagnostic-${{ runner.arch }}
+          retention-days: 3
+          path: .validation/upgrade-diagnostic.json
       - name: Remove and verify the owned Intel transport rule
         if: always() && runner.arch == 'X64'
         run: python3 scripts/ci-notary-transport.py cleanup
