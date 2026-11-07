@@ -141,7 +141,7 @@ class ToolHost {
         );
         return { requested: true };
       },
-      protectedRoots: [this.dataRoot, this.store.root, record.directory],
+      protectedRoots: [this.dataRoot, this.store.root, record.directory, this.leaseRoot],
       handle,
       emit: (channel, event) => {
         if (!contents.isDestroyed()) contents.send(channel, event);

@@ -42,6 +42,8 @@ async function create(
           productName: name,
           version: "0.1.0",
           private: true,
+          license: "SEE LICENSE IN LICENSE",
+          engines: {node:">=22.12.0"},
           main: "src/main.cjs",
           scripts: {
             start: "electron .",
@@ -61,12 +63,13 @@ async function create(
           build: {
             appId: id,
             productName: name,
-            files: ["src/**/*", "matiq-tool.json", "package.json"],
+            files: ["src/**/*", "matiq-tool.json", "package.json", "LICENSE"],
           },
         },
         null,
         2,
       ) + "\n",
+    "LICENSE": await fs.readFile(path.join(__dirname,"LICENSE"),"utf8"),
     ".gitignore": "node_modules/\ndist/\n*.mqt\n",
     "src/main.cjs":
       "require('@matiq-solutions/runtime/standalone.cjs').launch({root:require('node:path').join(__dirname,'..')}).catch(error=>{require('electron').dialog.showErrorBox('Could not start',error.message);require('electron').app.quit();});\n",

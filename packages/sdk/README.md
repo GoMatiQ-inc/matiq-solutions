@@ -13,7 +13,7 @@ npm install
 npm start
 ```
 
-Generated package dependencies use immutable versioned GitHub release tarballs. The generated document example saves locally and refuses to close over unsaved edits. Replace its workspace and adapter in this repository. The SDK release must exist before installing a scaffold's dependencies.
+Use Node 22.12 or newer for the SDK CLI and build tooling. Generated repositories include the MatiQ source-available license and package it with the standalone app. Generated package dependencies use immutable versioned GitHub release tarballs. The generated document example saves locally and refuses to close over unsaved edits. Replace its workspace and adapter in this repository. The SDK release must exist before installing a scaffold's dependencies.
 
 ## Adapter contract
 

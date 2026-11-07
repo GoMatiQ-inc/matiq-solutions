@@ -8,7 +8,8 @@ async function launch({ root, profile }) {
   if (profile) app.setPath("userData", profile);
   if (!app.requestSingleInstanceLock()) { app.quit(); return; }
   await app.whenReady();
-  const lease = await acquireToolLease({ root:path.join(app.getPath("appData"),"MatiQ Solutions","tool-locks"),id:manifest.id,owner:app.getName() });
+  const leaseRoot=path.join(app.getPath("appData"),"MatiQ Solutions","tool-locks");
+  const lease = await acquireToolLease({ root:leaseRoot,id:manifest.id,owner:app.getName() });
   const dataDir = app.getPath("userData");
   await fs.mkdir(dataDir, { recursive: true, mode: 0o700 });
   const window = new BrowserWindow({
@@ -23,7 +24,7 @@ async function launch({ root, profile }) {
   const requireFrame=require("./trusted-frame.cjs").frameGuard(contents,path.join(root,manifest.workspace));
   const host={
     window,view:{webContents:contents},session:contents.session,dataDir,resourceDir:root,manifest,
-    protectedRoots:[root,dataDir],
+    protectedRoots:[root,dataDir,leaseRoot],
     handle(channel,fn){
       if(typeof channel!=="string"||channel.startsWith("solutions:")||channels.includes(channel))throw Error("Choose a unique tool command channel.");
       ipcMain.handle(channel,async(event,...args)=>{
@@ -47,13 +48,17 @@ async function launch({ root, profile }) {
       try{await Promise.race([Promise.allSettled([...requests]),new Promise(resolve=>{timer=setTimeout(resolve,1000);})]);}
       finally{clearTimeout(timer);}
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
-      if(!activationFailed){const state=await instance.status();if(state.busy)throw Error(state.reason||"Finish your work before quitting.");}
+      if(!activationFailed){
+        const initial=await instance.status();if(initial.busy)throw Error(initial.reason||"Finish your work before quitting.");
+        await contents.executeJavaScript("document.documentElement.inert=true");
+        const final=await instance.status();if(final.busy)throw Error(final.reason||"Finish your work before quitting.");
+      }
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
       closing=true;await instance.dispose();
       for(const channel of channels)ipcMain.removeHandler(channel);
       for(const [emitter,event,fn] of listeners)emitter.removeListener(event,fn);
       await lease.release();quitting=true;app.quit();
-    })().catch(error=>{closing=activationFailed;dialog.showErrorBox("Tool could not close",error.message);host.show();}).finally(()=>{checking=false;});
+    })().catch(async error=>{closing=activationFailed;let detail=error.message;try{if(!contents.isDestroyed())await contents.executeJavaScript("document.documentElement.inert=false");}catch(restoreError){detail+=" Window recovery failed: "+restoreError.message;}dialog.showErrorBox("Tool could not close",detail);host.show();}).finally(()=>{checking=false;});
   });
   app.on("window-all-closed",()=>app.quit());
   try {

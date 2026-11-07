@@ -18,9 +18,9 @@
     "package": "electron-builder --publish never"
   },
   "dependencies": {
-    "@matiq-solutions/sdk": "0.1.0",
-    "@matiq-solutions/runtime": "0.1.0",
-    "@matiq-solutions/shell": "0.1.0",
+    "@matiq-solutions/sdk": "0.1.1",
+    "@matiq-solutions/runtime": "0.1.1",
+    "@matiq-solutions/shell": "0.1.1",
     "electron-updater": "6.8.9"
   },
   "devDependencies": {
@@ -83,5 +83,8 @@
         "repo": "matiq-solutions"
       }
     ]
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
