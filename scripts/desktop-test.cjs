@@ -343,7 +343,7 @@ const {
     for(let i=0;i<100;i++){if(await app.evaluate(()=>Boolean(globalThis.fixtureStandalone)))break;await new Promise(resolve=>setTimeout(resolve,50));}
     await app.evaluate(()=>{
       const tool=globalThis.fixtureStandalone,original=tool.instance.status;let edited=false;
-      tool.instance.status=async()=>{const snapshot=await original();if(!edited){edited=true;await tool.window.webContents.executeJavaScript("document.querySelector('textarea').value='An edit arriving during the close check.'");}return snapshot;};
+      tool.instance.status=async()=>{const snapshot=await original();if(!edited){edited=true;await tool.window.webContents.executeJavaScript("document.querySelector('textarea').value='An edit arriving during the close check.';document.querySelector('textarea').dispatchEvent(new Event('input',{bubbles:true}))");}return snapshot;};
     });
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].close());
     for(let i=0;i<100;i++){if(await app.evaluate(()=>Boolean(globalThis.fixtureCloseError)))break;await new Promise(resolve=>setTimeout(resolve,50));}
