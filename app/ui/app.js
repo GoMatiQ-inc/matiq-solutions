@@ -99,7 +99,7 @@ function card(tool, installed) {
     const running=state.running.some(item=>item.id===tool.id);
     if(running)row.append(button("Close",()=>api.request("close",{id:tool.id})));
     row.append(button(tool.enabled===false?"Enable":"Disable",()=>api.request("enable",{id:tool.id,enabled:tool.enabled===false})));
-    if(tool.previous)row.append(button("Roll back",async()=>{if(window.confirm("Return to the retained previous tool version? Your projects will be kept."))await api.request("rollback",{id:tool.id});}));
+    if(tool.previous)row.append(button("Roll back",async()=>{if(window.confirm("Return to the retained previous tool version and pause automatic downloads for all installed tools? Your projects will be kept. You can resume automatic downloads in Settings."))await api.request("rollback",{id:tool.id});}));
     if (tool.pending)
       row.append(element("span", "Update downloaded · restart required"));
     row.append(

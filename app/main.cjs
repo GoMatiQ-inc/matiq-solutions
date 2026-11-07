@@ -61,6 +61,9 @@ async function launch(options = {}) {
     activity = "",
     downloadController = null,
     downloadPhase = null,
+    downloadAutomatic = false,
+    downloadFinished = null,
+    rollbackInProgress = false,
     catalogRefresh = null,
     quitting = false;
   try {
@@ -112,6 +115,7 @@ async function launch(options = {}) {
     sharedModelRoot: options.sharedModelRoot,
     emit: (event) => send(event),
   });
+  const prepareExit=()=>require("./lifecycle.cjs").prepareShutdown({busy:()=>Boolean(downloadController||store.busy||rollbackInProgress),settings:()=>settingsTail,dispose:()=>host.dispose()});
   const uiURL = pathToFileURL(path.join(__dirname, "ui/index.html")).href;
   const requireFrame = require("@matiq-solutions/runtime/trusted-frame.cjs").frameGuard(window.webContents,path.join(__dirname,"ui/index.html"));
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -179,7 +183,9 @@ async function launch(options = {}) {
     approveCapabilities = false,
     reviewedVersion,
     reviewedCapabilities,
-  }) {
+  }, {automatic=false}={}) {
+    if(automatic&&(!settings.autoUpdates||rollbackInProgress))return {cancelled:true};
+    if(rollbackInProgress)throw Error("Wait for tool rollback to finish.");
     if (downloadController)
       throw Error("Wait for the current tool download or cancel it.");
     const installed = await store.state();
@@ -194,8 +200,13 @@ async function launch(options = {}) {
       throw Error("Review the tool requirements before installing.");
     const release = tool.packages[store.target];
     if (!release) throw Error("This tool is not available for your device.");
+    if(automatic&&(!settings.autoUpdates||rollbackInProgress))return {cancelled:true};
+    if(rollbackInProgress)throw Error("Wait for tool rollback to finish.");
     if(downloadController)throw Error("Wait for the current tool download or cancel it.");
     downloadController = new AbortController();
+    downloadAutomatic=automatic;
+    let resolveDownloadFinished;
+    downloadFinished=new Promise(resolve=>{resolveDownloadFinished=resolve;});
     downloadPhase="downloading";
     send();
     announce(`Downloading ${tool.name}…`);
@@ -223,7 +234,7 @@ async function launch(options = {}) {
       if(downloadController.signal.aborted){announce("Download cancelled. Choose Install or Download update to try again.");return {cancelled:true};}
       throw error;
     } finally {
-      downloadController = null;downloadPhase=null;
+      downloadController = null;downloadPhase=null;downloadAutomatic=false;downloadFinished=null;resolveDownloadFinished();
       send();
     }
   }
@@ -233,9 +244,10 @@ async function launch(options = {}) {
     const available = updatesFor(installed, catalog, store.target);
     if (settings.autoUpdates)
       for (const t of available) {
+        if(!settings.autoUpdates||rollbackInProgress)break;
         try {
           if((t.capabilities||[]).some(capability=>!installed.tools[t.id].manifest.capabilities.includes(capability)))throw Error("Review the new permissions in Downloads & updates before downloading this update.");
-          await install({ id: t.id, update: true });
+          await install({ id: t.id, update: true },{automatic:true});
         } catch (e) {
           announce(`${t.name}: ${e.message}`);
         }
@@ -246,6 +258,7 @@ async function launch(options = {}) {
     await requireFrame(event);
     if (typeof name !== "string" || JSON.stringify(args).length > 10000)
       throw Error("Invalid suite request.");
+    if(rollbackInProgress&&!['state','hide'].includes(name))throw Error("Wait for tool rollback to finish before starting another operation.");
     switch (name) {
       case "state": {
         const installed = await store.state();
@@ -256,7 +269,7 @@ async function launch(options = {}) {
           catalog,
           catalogStatus,
           settings,
-          installing: Boolean(downloadController) || store.busy,
+          installing: Boolean(downloadController) || store.busy || rollbackInProgress,
           canCancelDownload:downloadPhase==="downloading",
           activity,
           running: await host.status(),
@@ -273,15 +286,29 @@ async function launch(options = {}) {
         if(!downloadController||downloadPhase!=="downloading")throw Error("The download has finished. Wait for package verification to complete.");
         downloadController.abort();
         return {requested:true};
-      case "open":
-        return host.open(args.id);
+      case "open": {
+        announce("Opening installed tool…");
+        try{const result=await host.open(args.id);announce("Tool ready.");return result;}
+        catch(error){announce(error.message);throw error;}
+      }
       case "close":
         await host.close(args.id);
         return true;
-      case "rollback":
-        await host.close(args.id);
-        await store.rollback(args.id);
-        return true;
+      case "rollback": {
+        if((downloadController||store.busy)&&!downloadAutomatic)throw Error("Finish or cancel your manual tool download before rolling back.");
+        rollbackInProgress=true;
+        try{
+          await host.close(args.id);
+          settings.autoUpdates=false;
+          const pending=downloadFinished;
+          if(downloadAutomatic&&downloadPhase==='downloading')downloadController.abort();
+          await saveSettings();
+          if(pending)await pending;
+          await store.rollback(args.id);
+          announce("Previous tool version restored. Automatic tool downloads are paused; review updates before enabling them in Settings.");
+          return true;
+        }finally{rollbackInProgress=false;send();}
+      }
       case "hide":
         host.hide();
         return true;
@@ -302,10 +329,7 @@ async function launch(options = {}) {
         await saveSettings();
         return true;
       case "restart":
-        if (downloadController || store.busy)
-          throw Error("Finish tool downloads before restarting.");
-        await settingsTail;
-        await host.dispose();
+        await prepareExit();
         app.relaunch();
         quitting = true;
         app.quit();
@@ -322,9 +346,7 @@ async function launch(options = {}) {
         return true;
       case "app.update.install":
         if (appUpdate.status !== "ready") throw Error("Download the suite update before restarting.");
-        if (downloadController || store.busy) throw Error("Finish tool downloads before installing the suite update.");
-        await settingsTail;
-        await host.dispose();
+        await prepareExit();
         quitting=true;
         try { appUpdater().quitAndInstall(false,true); }
         catch(error) { quitting=false;throw error; }
@@ -357,10 +379,7 @@ async function launch(options = {}) {
     if (quitting) return;
     event.preventDefault();
     (async () => {
-      if (downloadController || store.busy)
-        throw Error("Finish or cancel tool downloads before quitting.");
-      await settingsTail;
-      await host.dispose();
+      await prepareExit();
       quitting = true;
       app.quit();
     })().catch((e) => {

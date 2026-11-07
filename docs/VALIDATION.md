@@ -1,32 +1,46 @@
 # Validation
 
-## Foundation slice — November 6, 2026
+## Published suite 0.1.0
 
-- 17 Node contract/security tests pass: package signatures, exact hash inventory, untrusted publisher, wrong target, unsafe paths/symlinks/collisions, installed-only updates, staged activation, compatible recovery, schema/capability gates, data preservation, changed installed files, filesystem failure, partial-extraction recovery and catalog-consent races.
-- A bounded Linux Electron journey generates a tool outside this source repository, packages/signs it with a disposable fixture identity, explicitly installs it through Marketplace, saves a local document, stages an update, manually restarts into it and verifies retained data, then uninstalls while preserving that document. It also rejects close/uninstall during unsaved editing. Owned processes and captured listeners are independently verified absent in finally cleanup.
-- Source was independently reviewed for documented standards/security and specification behavior. Findings were corrected with regression coverage. Fixture identities are not production signing identities.
+[Signed qualification run 42323282074](https://github.com/GoMatiQ-inc/matiq-solutions/actions/runs/42323282074) passed natively on Apple Silicon and Intel. The exact source is `dd10eb0a1d424cb98836f7e808787be4e87a411e`. It verifies:
 
-## Remaining qualification
+- Existing company Developer ID, hardened runtime, library validation, absence of debug entitlement, notarization, stapled ticket and Gatekeeper acceptance.
+- Exact update ZIP/DMG hashes and the signature of the application extracted from the ZIP.
+- Launching the actual packaged app with an isolated profile, empty library, Marketplace, Settings and no automatic tool installation.
+- A real newer signed/notarized suite download, native bundle replacement, automatic same-user relaunch and correct native architecture.
+- Retention of an installed SDK-generated tool, saved document and download preference. After observing the automatic native launch, a controlled launch of the exact replacement verifies its UI and reopens the retained document. These are separate observations in the receipt.
+- Independent owned-process and loopback-listener absence before cleanup succeeds.
 
-The journey above does not yet prove the actual Restart control or signed whole-app replacement. Native signed external-package loading, native inference/capture/input, actual standalone/suite Voice and Companion behavior, supported target installers and Mac installed-app acceptance remain unqualified. Do not infer native support from Linux fixtures or this source inspection.
+[Publication run 42326208369](https://github.com/GoMatiQ-inc/matiq-solutions/actions/runs/42326208369) published those exact qualified artifacts. It requires signing/upgrade qualification on both architectures and successful three-platform native checks on the identical source tree in merged history. It verifies artifact receipts, source/tag identity and the actual updater architecture selector before publishing a combined Mac feed. Downloads are immutable.
 
+The signed Apple Silicon release has also passed installed-app launch, empty-library, live Marketplace metadata, Settings, normal quit/relaunch, saved-preference persistence and public update-feed checks on a physical Mac. Its public release checksum matches the installed source. This is shell acceptance; Voice and Companion installed-tool acceptance is still pending.
 
-## SDK delivery and ownership qualification
+## SDK 0.1.3 and desktop foundation
 
-The current foundation has 28 contract tests. Added checks bind packaged application manifests to the suite package, preserve signed native resource bytes and executable flags, reject output overwrite, authenticate independent release descriptors, and serialize per-tool ownership across hosts. A dead-process ownership record can be recovered; damaged records and abandoned recovery mutexes fail visibly.
+[SDK publication 42325494686](https://github.com/GoMatiQ-inc/matiq-solutions/actions/runs/42325494686) passed native qualification before publishing immutable shared package archives. [Foundation checks 42326033587](https://github.com/GoMatiQ-inc/matiq-solutions/actions/runs/42326033587) pass 43 contract/helper/publication checks and desktop/package journeys on macOS, Windows and Linux.
 
-The SDK archives are produced by `node scripts/package-sdk.cjs <output-directory>`. Shared dependencies and generated repositories use versioned GitHub release archives, not an unpublished npm namespace. Publication runs native foundation qualification before attaching archives to an `sdk-v*` prerelease. The protected `catalog-signing` environment publishes only signed metadata on the separate `catalog` branch, following each registered tool's latest stable release every six hours. No tool source is fetched by catalog generation.
+Coverage includes signed inventories, untrusted publishers, wrong targets, unsafe paths/symlinks/collisions, unlisted installed files, exact catalog consent, capability/data-version gates, bounded HTTPS downloads, failed writes, interrupted extraction, installed-only updates, pending activation, compatible rollback and uninstall data preservation. Catalog signatures, expiry, replay floors and overlapping settings/refresh writes are checked.
 
-The Linux desktop journey passed after the ownership and shared-shell changes, including generated standalone and hosted workspace behavior. The updated journey presses the real Restart control, observes a distinct automatically relaunched PID with the staged tool activated, then verifies owned processes and captured listeners have stopped. It also injects failed activation/disposal and a broken status renderer to verify cleanup retry. A deterministic two-tool regression preserves an edit made during another tool's asynchronous status check. A real release-feed app update, actual Voice/Companion standalone ownership participation, and native package loading remain release acceptance requirements.
+The desktop journey generates a tool outside the suite repository and exercises explicit Marketplace installation, local document saves, unsaved-work close refusal, download cancellation, a staged tool update and the actual Restart control. A distinct automatically relaunched process activates the staged version and preserves the document. Failed activation/disposal retries, a closing renderer and edits arriving during asynchronous shutdown status checks have regression coverage.
 
+A fresh consumer of the published SDK 0.1.3 archive generated an independent tool repository, installed its versioned dependencies, built and ran its standalone app, saved locally, packaged the actual native app resources, installed that same payload through Marketplace and saved inside the suite. The fixture publisher is ephemeral and is never trusted by production installations. The example remains a document starter; it does not implement a canvas product.
 
-## SDK 0.1.1 patch qualification
+Per-tool ownership leases prevent updated standalone and suite hosts from owning the same tool concurrently. Dead owners can be recovered; malformed records and abandoned recovery mutexes fail visibly. Older standalone versions without this lease protocol cannot participate: update those standalone apps before testing concurrent ownership.
 
-The generated standalone host now freezes editing before its final status snapshot and restores editing after a refused close. The desktop journey injects an edit between status collection and shutdown, verifies the window/document survive, then saves and closes normally. Generated repositories carry the intended source-available license. Archive tooling uses @electron/asar 4.3.1 with an explicit Node >=22.12 requirement; native file and manifest-binding checks remain green.
+Signing helpers preserve Apple API-key and pre-imported identity workflows. Apple-ID notarization owns a separate disposable keychain; credentials remain outside command arguments. Cleanup tests inject an actual TERM-resistant child and a failed normal close, verify bounded owned-process cleanup, and ensure an exited app handle cannot adopt an unrelated reused PID.
 
+## Tool delivery qualification
 
-## Native release candidate work
+Tool implementation stays in each tool repository. `pack-app` consumes the already packaged standalone, including signed unpacked native files and declared extra resources. It binds app and tool manifest versions, preserves native bytes/modes, narrows the target and writes a signed release descriptor. Hosted qualification uses the suite's production publisher trust; publication binds its proof to exact package and descriptor hashes.
 
-The current candidate has 37 contract/helper tests. Added checks cover concurrent close requests and safe status while a renderer closes, temporary signing-keychain cleanup, notarization profile environment restoration, and password-free command arguments/diagnostics. Linux tests exercise the secure terminal prompt with a local fixture; the native Apple workflow must validate it against the real existing account.
+Companion has 30 passing unit checks. Actual-source hosted installation, Settings/model navigation, isolated project creation, real local inference, switching/reopening and host-owned update behavior pass on the Linux development VM. Its current four-platform native source matrix and signed native tool delivery are still running.
 
-The desktop journey additionally cancels an in-progress download without registering a tool, and overlaps a held preference write with a signed catalog refresh to preserve the latest replay-protection sequence. The packaged suite launches from a built app with an isolated standard user-data directory, empty library, marketplace and settings. Generic CI now packages and launches on each desktop runner. Signed Mac qualification uses existing company identities, verifies hardened runtime, library validation, notarization, Gatekeeper and exact ZIP hashes, and then runs the packaged journey. Actual signed runs, release-feed application upgrade, real signed Voice/Companion suite artifacts and final Mac mini acceptance remain required.
+Voice has 60 passing unit checks. Its native Mac/Windows source matrix and signed native hosted qualification are still running. Synthetic microphone/system-audio, keyboard-protocol and OAuth-provider fixtures do not establish real microphone, physical-key, live-call or real provider-consent acceptance. Native speech/speaker inference uses real models and WAV fixtures. Linux Voice native engines are unsupported and excluded from its tool targets.
+
+The full build goal remains active until the actual released Voice and Companion payloads install and operate in the installed suite, their standalone applications are qualified, and task-owned temporary resources are cleaned up. Do not infer native platform support from another platform's fixtures.
+
+## Reproduction
+
+Use Node >=22.12 and the repository lockfile. Run `npm ci`, `npm test`, `npm run test:desktop`, `npm run package:dir` and `npm run test:packaged` on the intended OS; Linux desktop tests require an X server. Native signing and real updater qualification run only through the protected release workflow. Default-profile upgrade fixtures are restricted to fresh disposable GitHub-hosted Macs.
+
+SDK archives come from `node scripts/package-sdk.cjs <output-directory>` and use versioned GitHub dependencies. The protected main-only catalog workflow signs metadata on the separate `catalog` branch every six hours or on demand, following registered repositories' latest stable tool releases. It never fetches tool source. Users explicitly install new tools; compatible updates apply only to installed IDs and activate after a safe restart.

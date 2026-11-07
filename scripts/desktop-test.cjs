@@ -47,7 +47,7 @@ const {
     const publicKey = keys.publicKey.export({ type: "spki", format: "pem" });
     const packages = {},
       entries = [];
-    for (const version of ["0.1.0", "0.1.1"]) {
+    for (const version of ["0.1.0", "0.1.1", "0.1.2"]) {
       const file = path.join(root, version + ".mqt"),
         meta = await pack({
           root: source,
@@ -65,6 +65,8 @@ const {
         packages: { [process.platform + "-" + process.arch]: { url, ...meta } },
       });
     }
+    const secondSource=path.join(root,"second-independent-tool-repository"),secondManifest=await create(secondSource,{id:"com.matiq.fixture-second",name:"Other document"}),secondEntries=[];
+    for(const version of ["0.1.0","0.1.1"]){const file=path.join(root,"second-"+version+".mqt"),meta=await pack({root:secondSource,manifest:{...secondManifest,version},publisher:"fixture",privateKey:keys.privateKey,include:["src"],output:file}),url="https://fixture.invalid/second-"+version;packages[url]=file;secondEntries.push({...secondManifest,version,packages:{[process.platform+"-"+process.arch]:{url,...meta}}});}
     const configFile = path.join(root, "fixture.json");
     const config = {
       profile: path.join(root, "profile"),
@@ -92,6 +94,11 @@ const {
       const page = await app.firstWindow();
       page.setDefaultTimeout(15000);
       return page;
+    }
+    async function replaceCatalog(tools){
+      const state=await page.evaluate(()=>window.solutions.request("state")),signed={schema:1,sequence:Math.max(state.catalog.sequence,state.settings.catalogSequence||0)+1,expires:new Date(Date.now()+86400000).toISOString(),tools},envelope={signed,publisher:"fixture",signature:sign(signed,keys.privateKey)};
+      await app.evaluate((_,envelope)=>{globalThis.fetch=async()=>new Response(JSON.stringify(envelope),{status:200});},envelope);
+      await page.evaluate(()=>window.solutions.request("catalog.refresh"));
     }
     async function close() {
       if (!app) return;
@@ -315,6 +322,32 @@ const {
     await page
       .getByRole("button", { name: "Back to my tools", exact: true })
       .click();
+    await replaceCatalog([entries[1],secondEntries[0]]);
+    await page.getByRole("button",{name:"Marketplace",exact:true}).click();
+    await page.getByRole("button",{name:"Install",exact:true}).click();await page.getByRole("dialog").getByRole("button",{name:"Install",exact:true}).click();await page.getByText("Other document installed. Choose Open.",{exact:true}).waitFor();
+    await replaceCatalog([entries[2],secondEntries[1]]);
+    await app.evaluate(()=>{globalThis.fixtureDownloadURLs=[];globalThis.fixtureConfig.downloadDelayMs=30000;});
+    await page.evaluate(()=>window.solutions.request("settings",{autoUpdates:true}));
+    await page.evaluate(()=>{window.fixtureAutomaticUpdate=window.solutions.request("updates.check");});
+    let delayedAutomatic;for(let attempt=0;attempt<100;attempt++){delayedAutomatic=await page.evaluate(()=>window.solutions.request("state"));if(delayedAutomatic.canCancelDownload)break;await new Promise(resolve=>setTimeout(resolve,20));}
+    assert.equal(delayedAutomatic.canCancelDownload,true);
+    assert.deepEqual(await app.evaluate(()=>globalThis.fixtureDownloadURLs),[entries[2].packages[process.platform+"-"+process.arch].url]);
+    await page.getByRole("button",{name:"My tools",exact:true}).click();
+    page.once("dialog", (d) => {assert.match(d.message(),/pause automatic downloads for all installed tools/);return d.accept();});
+    await page.getByRole("button",{name:"Roll back",exact:true}).click();
+    await page.locator("article.card").filter({has:page.getByRole("heading",{name:"Local document",exact:true})}).getByText("Version 0.1.0",{exact:true}).waitFor();
+    const rolledBack=await page.evaluate(()=>window.solutions.request("state"));
+    assert.equal(rolledBack.settings.autoUpdates,false);
+    assert.equal(JSON.parse(await fs.readFile(path.join(config.profile,"settings.json"),"utf8")).autoUpdates,false);
+    assert.equal(rolledBack.installed.tools[manifest.id].version,"0.1.0");
+    assert.equal(rolledBack.installed.tools[manifest.id].pending,undefined);
+    await page.evaluate(()=>window.fixtureAutomaticUpdate);
+    const afterAutomatic=await page.evaluate(()=>window.solutions.request("state"));
+    assert.equal(afterAutomatic.installed.tools[manifest.id].pending,undefined);
+    assert.equal(afterAutomatic.installed.tools[secondManifest.id].pending,undefined);
+    assert.deepEqual(await app.evaluate(()=>globalThis.fixtureDownloadURLs),[entries[2].packages[process.platform+"-"+process.arch].url]);
+    console.log("PASS: rollback cancels/drains the delayed automatic update, restores the previous tool, durably pauses downloads and never starts the next tool update.");
+    page.once("dialog",d=>d.accept());await page.locator("article.card").filter({has:page.getByRole("heading",{name:"Other document",exact:true})}).getByRole("button",{name:"Uninstall",exact:true}).click();await page.getByRole("heading",{name:"Other document",exact:true}).waitFor({state:"hidden"});
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Uninstall", exact: true }).click();
     await page
