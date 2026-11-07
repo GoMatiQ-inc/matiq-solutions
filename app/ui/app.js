@@ -136,6 +136,7 @@ function render() {
         settings: "Settings",
       }[page];
   $("#return").hidden = !selected;
+  $("#cancel-download").hidden=!state.canCancelDownload;
   for (const b of document.querySelectorAll("[data-page]"))
     b.classList.toggle("active", !selected && b.dataset.page === page);
   const root = $("#content");
@@ -273,6 +274,7 @@ for (const b of document.querySelectorAll("[data-page]"))
       page = b.dataset.page;
       await api.request("hide");
     });
+$("#cancel-download").onclick=()=>run(()=>api.request("download.cancel"));
 $("#return").onclick = () =>
   run(async () => {
     selected = null;

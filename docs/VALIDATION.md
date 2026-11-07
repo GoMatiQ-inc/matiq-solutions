@@ -23,3 +23,10 @@ The Linux desktop journey passed after the ownership and shared-shell changes, i
 ## SDK 0.1.1 patch qualification
 
 The generated standalone host now freezes editing before its final status snapshot and restores editing after a refused close. The desktop journey injects an edit between status collection and shutdown, verifies the window/document survive, then saves and closes normally. Generated repositories carry the intended source-available license. Archive tooling uses @electron/asar 4.3.1 with an explicit Node >=22.12 requirement; native file and manifest-binding checks remain green.
+
+
+## Native release candidate work
+
+The current candidate has 37 contract/helper tests. Added checks cover concurrent close requests and safe status while a renderer closes, temporary signing-keychain cleanup, notarization profile environment restoration, and password-free command arguments/diagnostics. Linux tests exercise the secure terminal prompt with a local fixture; the native Apple workflow must validate it against the real existing account.
+
+The desktop journey additionally cancels an in-progress download without registering a tool, and overlaps a held preference write with a signed catalog refresh to preserve the latest replay-protection sequence. The packaged suite launches from a built app with an isolated standard user-data directory, empty library, marketplace and settings. Generic CI now packages and launches on each desktop runner. Signed Mac qualification uses existing company identities, verifies hardened runtime, library validation, notarization, Gatekeeper and exact ZIP hashes, and then runs the packaged journey. Actual signed runs, release-feed application upgrade, real signed Voice/Companion suite artifacts and final Mac mini acceptance remain required.

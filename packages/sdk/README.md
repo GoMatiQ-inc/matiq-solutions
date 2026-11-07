@@ -47,3 +47,10 @@ Use `--extra engine,native` for additional resource directories outside `app.asa
 4. The marketplace verifies metadata and packages. Users explicitly install new tools. Updates apply only to installed IDs and remain staged until a safe restart. Permission increases require another review; incompatible data versions are rejected until a migration has been qualified.
 
 `matiq-tool pack` packages explicitly included source directories for development fixtures and tools without external/native resources. Native releases should use `pack-app`.
+
+
+## Shared native release identity
+
+The shell package supplies the company wordmark, fonts and native app icons. Scaffolds reference those package assets rather than maintaining another copy. Hosted tool navigation keeps functional setup and settings controls visible.
+
+For company Mac releases, use `withMacKeychain` from `@matiq-solutions/sdk/mac-keychain.cjs` and call `withNotaryProfile` from `@matiq-solutions/sdk/notary-profile.cjs` inside its operation. Build configuration is validated before entering the credential wrappers. The existing P12 credentials are imported into a temporary keychain; notarization uses a short-lived profile in that same keychain. Passwords travel through protected stdin/secure terminal prompts, not command arguments. Both wrappers restore their environment in `finally`, and the outer wrapper removes the temporary keychain. DMG/ZIP callers pass `{requireInstaller:false}`; PKG callers retain the default requirement for both identities. These are release-time helpers, not end-user runtime requirements.

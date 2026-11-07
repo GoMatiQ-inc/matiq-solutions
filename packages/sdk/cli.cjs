@@ -50,6 +50,7 @@ async function create(
             package: "electron-builder --publish never",
             "tool:validate": "matiq-tool validate",
             "tool:pack": "matiq-tool pack --output tool.mqt",
+            "tool:pack-app": "matiq-tool pack-app",
           },
           dependencies: {
             "@matiq-solutions/runtime": sdkAsset("runtime"),
@@ -63,6 +64,8 @@ async function create(
           build: {
             appId: id,
             productName: name,
+            icon: "node_modules/@matiq-solutions/shell/assets/app-icon.png",
+            mac: {icon:"node_modules/@matiq-solutions/shell/assets/app-icon.icns"},
             files: ["src/**/*", "matiq-tool.json", "package.json", "LICENSE"],
           },
         },

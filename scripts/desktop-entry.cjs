@@ -1,12 +1,14 @@
 globalThis.fixtureShell = require("@matiq-solutions/shell");
 const fs = require("node:fs/promises");
+globalThis.fixtureFileSystem=fs;
 const config = JSON.parse(
   require("node:fs").readFileSync(process.env.MATIQ_FIXTURE_CONFIG, "utf8"),
 );
+globalThis.fixtureConfig=config;
 require("../app/main.cjs")
   .launch({
     ...config,
-    download: async (url) => fs.readFile(config.packages[url]),
+    download: async (url,{signal}) => {if(config.downloadDelayMs)await require("node:timers/promises").setTimeout(config.downloadDelayMs,undefined,{signal});return fs.readFile(config.packages[url]);},
   })
   .then(async ({store}) => {
     const path=require("node:path"),marker=path.join(config.profile,"restart-probe.json");
