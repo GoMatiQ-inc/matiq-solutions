@@ -18,7 +18,8 @@
     "package": "electron-builder --publish never",
     "package:release": "node scripts/release.cjs",
     "test:signatures": "node scripts/verify-mac-signing.cjs",
-    "test:packaged": "node scripts/packaged-test.cjs"
+    "test:packaged": "node scripts/packaged-test.cjs",
+    "test:upgrade": "node scripts/upgrade-test.cjs"
   },
   "dependencies": {
     "@matiq-solutions/sdk": "0.1.2",
