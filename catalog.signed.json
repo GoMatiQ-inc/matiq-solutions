@@ -1,8 +1,8 @@
 {
   "signed": {
     "schema": 1,
-    "sequence": 1794022554449,
-    "expires": "2026-11-14T03:35:54.449Z",
+    "sequence": 1794024898551,
+    "expires": "2026-11-14T04:14:58.551Z",
     "tools": [
       {
         "schema": 1,
@@ -33,9 +33,42 @@
         },
         "source": "https://github.com/GoMatiQ-inc/matiq-voice",
         "license": "MatiQ source-available — no paid redistribution"
+      },
+      {
+        "schema": 1,
+        "id": "com.matiq.companion",
+        "name": "MatiQ Companion",
+        "description": "Chat with local models and manage project files with tools you control.",
+        "version": "0.1.2",
+        "capabilities": [
+          "files",
+          "network",
+          "computer"
+        ],
+        "sdk": 1,
+        "dataVersion": 1,
+        "runtime": "electron-45.2.3",
+        "targets": [
+          "darwin-arm64",
+          "darwin-x64"
+        ],
+        "packages": {
+          "darwin-arm64": {
+            "url": "https://github.com/GoMatiQ-inc/matiq-companion/releases/download/v0.1.2/MatiQ-Companion-0.1.2-darwin-arm64.mqt",
+            "bytes": 89420189,
+            "sha256": "99b01d5f418893de49a820226a4654f5627922444626e4d3564060c0f81335d8"
+          },
+          "darwin-x64": {
+            "url": "https://github.com/GoMatiQ-inc/matiq-companion/releases/download/v0.1.2/MatiQ-Companion-0.1.2-darwin-x64.mqt",
+            "bytes": 101867346,
+            "sha256": "c5ec96814ca6f97e5b9ab23194662b74e5f7a5c3298352caef3a476045d5e451"
+          }
+        },
+        "source": "https://github.com/GoMatiQ-inc/matiq-companion",
+        "license": "MatiQ source-available — no paid redistribution"
       }
     ]
   },
   "publisher": "matiq-solutions-release-v1",
-  "signature": "Y60E5OpROZp27iHmkSi+bzHtGgBv0htDjwVBAgG6zceCHQar3zbYlzzS0GbkxKwMov7bDFl5Je80sZ48gfULCg=="
+  "signature": "iWEh9gNWSnF3Pk1Dr167VyAUXKxOautvaAS9QwKWxtezIZqHlQxHrKzDE5gXu5IDh4481zhOYxhSV2CYwL/aAQ=="
 }
