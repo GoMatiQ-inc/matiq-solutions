@@ -1,0 +1,76 @@
+name: Publish qualified Mac suite
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful signed Mac suite qualification run
+        required: true
+permissions:
+  contents: read
+concurrency: publish-qualified-suite
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Require exact trusted native qualification and download its tested bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run }}
+        run: |
+          python3 - <<'PYTHON'
+          import json,os,pathlib,re,subprocess
+          def gh(*args): return subprocess.check_output(['gh',*args],text=True)
+          repo=os.environ['GITHUB_REPOSITORY'];run_id=os.environ['SOURCE_RUN']
+          assert re.fullmatch(r'[0-9]+',run_id),'Use a numeric native qualification run ID.'
+          run=json.loads(gh('api',f'repos/{repo}/actions/runs/{run_id}'))
+          assert run['conclusion']=='success' and run['path']=='.github/workflows/release.yml','Require successful signed native qualification.'
+          assert run['head_repository']['full_name']==repo,'Fork artifacts are not publishable.'
+          source=run['head_sha'];subprocess.run(['git','merge-base','--is-ancestor',source,'origin/main'],check=True)
+          jobs=json.loads(gh('api',f'repos/{repo}/actions/runs/{run_id}/jobs?per_page=100'))['jobs']
+          assert {'signed (macos-latest)','signed (macos-15-intel)'} <= {job['name'] for job in jobs if job['conclusion']=='success'},'Require both signed Mac architectures and their real installed upgrade tests.'
+          source_tree=subprocess.check_output(['git','rev-parse',source+'^{tree}'],text=True).strip()
+          checks=json.loads(gh('api',f'repos/{repo}/actions/workflows/checks.yml/runs?status=completed&per_page=100'))['workflow_runs'];native=None
+          for check in checks:
+              if check['conclusion']!='success' or check['head_repository']['full_name']!=repo: continue
+              tested=check['head_sha']
+              if subprocess.run(['git','merge-base','--is-ancestor',tested,'origin/main'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode: continue
+              tree=subprocess.check_output(['git','rev-parse',tested+'^{tree}'],text=True).strip()
+              if tree!=source_tree: continue
+              rows=json.loads(gh('api',f"repos/{repo}/actions/runs/{check['id']}/jobs?per_page=100"))['jobs']
+              if {'native (ubuntu-latest)','native (macos-latest)','native (windows-latest)'} <= {row['name'] for row in rows if row['conclusion']=='success'}:
+                  native=check;break
+          assert native,'Require all three desktop checks on the exact signed source tree in merged history.'
+          version=json.loads(subprocess.check_output(['git','show',source+':package.json'],text=True))['version'];assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',version)
+          refs=subprocess.check_output(['git','ls-remote','--tags','origin',f'refs/tags/v{version}',f'refs/tags/v{version}^{{}}'],text=True).splitlines()
+          if refs:
+              target=next((line.split()[0] for line in refs if line.endswith('^{}')),refs[0].split()[0]);assert target==source,'Existing release tag must identify the exact qualified source.'
+          for arch,runner_arch in [('arm64','ARM64'),('x64','X64')]:gh('run','download',run_id,'--repo',repo,'--name','signed-suite-'+runner_arch,'--dir','qualified-assets/'+arch)
+          print(f"Publishing qualified source {source}, native run {native['id']}, signed run {run_id}")
+          pathlib.Path('RELEASE_NOTES.md').write_text(f"MatiQ Solutions {version} — signed Mac suite\n\nChoose Apple Silicon (arm64) or Intel (x64); macOS 14.2 or later. The suite starts with no tools installed. Browse the marketplace and install only the tools you want. Models download separately when needed.\n\nThe application is signed with the existing company Developer ID, notarized and stapled. Both Mac architectures passed native launch and real signed download/replacement/relaunch tests with retained tool data. [Qualified build]({run['html_url']}); source `{source}`.\n\nPersonal and internal business use is free under the repository no-sale license. Paid redistribution, paid hosting and paid bundles require separate permission. Third-party dependencies retain their licenses.\n\nWindows and Linux source/package smoke checks pass; this release distributes qualified Mac installers only.\n")
+          with open(os.environ['GITHUB_ENV'],'a') as env:env.write(f'SOLUTIONS_PUBLISH_VERSION={version}\nSOLUTIONS_PUBLISH_SOURCE={source}\n')
+          PYTHON
+      - name: Verify receipt hashes and updater architecture selection
+        run: node scripts/prepare-suite-release.cjs
+      - name: Publish immutable qualified downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$SOLUTIONS_PUBLISH_VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then echo 'Release already exists. Inspect it; never overwrite published downloads.' >&2; exit 1; fi
+          shopt -s nullglob
+          assets=(release-assets/*.dmg release-assets/*.zip release-assets/*.blockmap release-assets/latest-mac.yml release-assets/SHA256SUMS.txt)
+          gh release create "$tag" "${assets[@]}" --draft --target "$SOLUTIONS_PUBLISH_SOURCE" --title "MatiQ Solutions $SOLUTIONS_PUBLISH_VERSION — signed Mac suite" --notes-file RELEASE_NOTES.md
+          gh release edit "$tag" --draft=false --latest
