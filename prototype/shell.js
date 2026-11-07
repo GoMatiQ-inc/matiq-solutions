@@ -5,7 +5,7 @@ const mqPreview = {
   detail: null,
   query: "",
   filter: "all",
-  installed: new Set(["voice", "companion"]),
+  installed: new Set(["com.matiq.voice", "com.matiq.companion"]),
   disabled: new Set(),
   running: new Set(),
   review: false,
@@ -19,20 +19,23 @@ function solutionsPrototype(root) {
   const s = mqPreview,
     tools = report.prototype_tools || [
       {
-        id: "voice",
+        id: "com.matiq.voice",
         name: "MatiQ Voice",
         description:
           "Local dictation and meeting notes, with speech kept on your device.",
         version: "0.3.13",
       },
       {
-        id: "companion",
+        id: "com.matiq.companion",
         name: "MatiQ Companion",
         description:
           "Chat with local models, attach files and choose the tools each conversation can use.",
         version: "0.1.5",
       },
     ];
+  tools.forEach((t) => {
+    t.id = t.toolId || t.id;
+  });
   const n = (tag, text, cls) => el(tag, text, cls),
     draw = () => solutionsPrototype(root),
     b = (text, fn, primary = false) => {
@@ -52,8 +55,8 @@ function solutionsPrototype(root) {
     s.detail
       ? "tool-details"
       : tools.some((t) => t.id === s.page)
-        ? ["voice", "companion"].includes(s.page)
-          ? s.page + "-workspace"
+        ? ["com.matiq.voice", "com.matiq.companion"].includes(s.page)
+          ? s.page.split(".").at(-1) + "-workspace"
           : "general"
         : s.page;
   root.replaceChildren();
@@ -77,7 +80,7 @@ function solutionsPrototype(root) {
         }
         s.installed = s.installed.size
           ? new Set()
-          : new Set(["voice", "companion"]);
+          : new Set(["com.matiq.voice", "com.matiq.companion"]);
         move("library");
       },
     ),
@@ -117,6 +120,7 @@ function solutionsPrototype(root) {
     ),
   );
   function svgIcon(kind) {
+    if (!["voice", "companion"].includes(kind)) kind = "launcher";
     const ns = "http://www.w3.org/2000/svg",
       svg = document.createElementNS(ns, "svg");
     svg.setAttribute("viewBox", "0 0 24 24");
@@ -184,7 +188,7 @@ function solutionsPrototype(root) {
     });
     tile.className = "mq-app-tile";
     const badge = n("span", undefined, "mq-app-icon");
-    badge.append(svgIcon(t.id));
+    badge.append(svgIcon(t.id.split(".").at(-1)));
     tile.append(badge, n("span", t.name.replace("MatiQ ", "")));
     if (s.page === t.id) tile.setAttribute("aria-current", "page");
     appgrid.append(tile);
@@ -265,7 +269,7 @@ function solutionsPrototype(root) {
     );
     const hero = n("div", undefined, "mq-overview-hero"),
       icon = n("span", undefined, "mq-app-icon");
-    icon.append(svgIcon(t.id));
+    icon.append(svgIcon(t.id.split(".").at(-1)));
     const text = n("div");
     text.append(
       n("h2", t.name),
@@ -288,7 +292,7 @@ function solutionsPrototype(root) {
       actions.append(
         open,
         b(disabled ? "Enable app" : "Disable app", () => {
-          if (t.id === "voice" && s.recording) {
+          if (t.id === "com.matiq.voice" && s.recording) {
             s.notice = "Stop the sample recording before disabling Voice.";
           } else {
             disabled ? s.disabled.delete(t.id) : s.disabled.add(t.id);
@@ -302,7 +306,7 @@ function solutionsPrototype(root) {
           draw();
         }),
         b("Uninstall", () => {
-          if (t.id === "voice" && s.recording) {
+          if (t.id === "com.matiq.voice" && s.recording) {
             s.notice = "Stop the sample recording before uninstalling Voice.";
             draw();
             return;
@@ -347,16 +351,20 @@ function solutionsPrototype(root) {
       n("h3", "Overview"),
       n(
         "p",
-        t.id === "voice"
+        t.id === "com.matiq.voice"
           ? "Dictate into your everyday apps or transcribe recordings using a model running on your computer. Choose and download a speech model separately after installation."
-          : "Chat with a local language model, attach files and choose which actions each conversation can use. Choose and download a language model separately after installation.",
+          : t.id === "com.matiq.companion"
+            ? "Chat with a local language model, attach files and choose which actions each conversation can use. Choose and download a language model separately after installation."
+            : t.description,
       ),
       n("h3", "Permissions"),
       n(
         "p",
-        t.id === "voice"
+        t.id === "com.matiq.voice"
           ? "Microphone for dictation. Accessibility and Input Monitoring for shortcuts and text insertion."
-          : "Screen Recording to see your screen. Accessibility for approved mouse and keyboard actions.",
+          : t.id === "com.matiq.companion"
+            ? "Screen Recording to see your screen. Accessibility for approved mouse and keyboard actions."
+            : "Any required permissions are requested by this app when needed. Installation does not grant OS access.",
       ),
       n(
         "p",
@@ -367,7 +375,12 @@ function solutionsPrototype(root) {
       ["Version", t.version],
       ["Publisher", "MatiQ Solutions"],
       ["Installation", installed ? "Installed" : "Not installed"],
-      ["Models", "Downloaded separately"],
+      [
+        "Models",
+        ["com.matiq.voice", "com.matiq.companion"].includes(t.id)
+          ? "Downloaded separately"
+          : "App specific",
+      ],
       ["Data", "Stored locally"],
     ]) {
       const fact = n("div");
@@ -390,7 +403,7 @@ function solutionsPrototype(root) {
         const tile = b("", () => move(t.id));
         tile.className = "mq-home-app";
         const icon = n("span", undefined, "mq-app-icon");
-        icon.append(svgIcon(t.id));
+        icon.append(svgIcon(t.id.split(".").at(-1)));
         tile.append(icon, n("strong", t.name.replace("MatiQ ", "")));
         grid.append(tile);
       }
@@ -472,7 +485,7 @@ function solutionsPrototype(root) {
             });
           name.className = "mq-app-name";
           const icon = n("span", undefined, "mq-app-icon");
-          icon.append(svgIcon(t.id));
+          icon.append(svgIcon(t.id.split(".").at(-1)));
           const info = n("div");
           info.append(name, n("p", t.description));
           const cell = n("div", undefined, "mq-app-cell");
