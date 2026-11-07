@@ -1,6 +1,6 @@
 {
   "name": "@matiq-solutions/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "main": "index.cjs",
   "license": "SEE LICENSE IN LICENSE",
   "files": [
@@ -11,7 +11,8 @@
     "templates",
     "LICENSE",
     "*.d.ts",
-    "README.md"
+    "README.md",
+    "*.py"
   ],
   "dependencies": {
     "adm-zip": "0.6.1",

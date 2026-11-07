@@ -17,7 +17,7 @@ async function launch({ root, profile }) {
     webPreferences:{preload:path.join(root,manifest.preload),contextIsolation:true,nodeIntegration:false,sandbox:true},
   });
   const contents=window.webContents,channels=[],listeners=[],requests=new Set();
-  let quitting=false,closing=false,checking=false;
+  let quitting=false,closing=false,checking=false,frozen;
   contents.setWindowOpenHandler(()=>({action:"deny"}));
   contents.on("will-navigate",e=>e.preventDefault());
   contents.session.setPermissionRequestHandler((_c,_p,cb)=>cb(false));
@@ -50,7 +50,7 @@ async function launch({ root, profile }) {
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
       if(!activationFailed){
         const initial=await instance.status();if(initial.busy)throw Error(initial.reason||"Finish your work before quitting.");
-        await contents.executeJavaScript("document.documentElement.inert=true");
+        frozen=await contents.executeJavaScript("(()=>{const previous=document.documentElement.inert;document.documentElement.inert=true;return previous;})()");
         const final=await instance.status();if(final.busy)throw Error(final.reason||"Finish your work before quitting.");
       }
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
@@ -58,7 +58,7 @@ async function launch({ root, profile }) {
       for(const channel of channels)ipcMain.removeHandler(channel);
       for(const [emitter,event,fn] of listeners)emitter.removeListener(event,fn);
       await lease.release();quitting=true;app.quit();
-    })().catch(async error=>{closing=activationFailed;let detail=error.message;try{if(!contents.isDestroyed())await contents.executeJavaScript("document.documentElement.inert=false");}catch(restoreError){detail+=" Window recovery failed: "+restoreError.message;}dialog.showErrorBox("Tool could not close",detail);host.show();}).finally(()=>{checking=false;});
+    })().catch(async error=>{closing=activationFailed;let detail=error.message;try{if(frozen!==undefined&&!contents.isDestroyed())await contents.executeJavaScript(`document.documentElement.inert=${Boolean(frozen)}`);}catch(restoreError){detail+=" Window recovery failed: "+restoreError.message;}dialog.showErrorBox("Tool could not close",detail);host.show();}).finally(()=>{checking=false;frozen=undefined;});
   });
   app.on("window-all-closed",()=>app.quit());
   try {

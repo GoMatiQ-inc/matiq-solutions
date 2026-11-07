@@ -49,10 +49,19 @@ async function launch(options = {}) {
     if (e.code !== "ENOENT")
       throw Error("Suite settings are damaged. Restore your settings backup.");
   }
+  let settingsTail=Promise.resolve();
+  function saveSettings(){
+    const operation=settingsTail.then(()=>atomicJSON(settingsFile,{...settings}));
+    // The caller receives errors; the tail lets a later explicit retry proceed.
+    settingsTail=operation.catch(()=>{});
+    return operation;
+  }
   let catalog = options.catalog || require("../catalog/catalog.json"),
     catalogStatus = "Bundled marketplace catalog. Refresh when connected.",
     activity = "",
     downloadController = null,
+    downloadPhase = null,
+    catalogRefresh = null,
     quitting = false;
   try {
     const envelope = JSON.parse(await fs.readFile(catalogFile, "utf8"));
@@ -129,7 +138,11 @@ async function launch(options = {}) {
     updater.on("error",error=>{quitting=false;appUpdate={status:"error",message:error.message};announce("Suite update: "+error.message);});
     return updater;
   }
-  async function refreshCatalog() {
+  function refreshCatalog(){
+    if(!catalogRefresh)catalogRefresh=loadCatalog().finally(()=>{catalogRefresh=null;});
+    return catalogRefresh;
+  }
+  async function loadCatalog() {
     const response = await fetch(CATALOG_URL, {
       signal: AbortSignal.timeout(30000),
     });
@@ -153,10 +166,11 @@ async function launch(options = {}) {
         Math.max(catalog.sequence, settings.catalogSequence || 0),
       );
     settings.catalogSequence = verified.sequence;
-    await atomicJSON(settingsFile, settings);
+    await saveSettings();
     await atomicJSON(catalogFile, envelope);
     catalog = verified;
     catalogStatus = "Verified marketplace refreshed.";
+    send();
     return catalog;
   }
   async function install({
@@ -180,7 +194,10 @@ async function launch(options = {}) {
       throw Error("Review the tool requirements before installing.");
     const release = tool.packages[store.target];
     if (!release) throw Error("This tool is not available for your device.");
+    if(downloadController)throw Error("Wait for the current tool download or cancel it.");
     downloadController = new AbortController();
+    downloadPhase="downloading";
+    send();
     announce(`Downloading ${tool.name}…`);
     try {
       const bytes = await (options.download || download)(release.url, {
@@ -189,6 +206,7 @@ async function launch(options = {}) {
         progress: (p) =>
           announce(`Downloading ${tool.name} · ${Math.round(p * 100)}%`),
       });
+      downloadPhase="verifying";send();
       await store.install(bytes, {
         update,
         approveCapabilities,
@@ -201,17 +219,22 @@ async function launch(options = {}) {
           ? `${tool.name} update downloaded. Restart when ready.`
           : `${tool.name} installed. Choose Open.`,
       );
+    } catch(error) {
+      if(downloadController.signal.aborted){announce("Download cancelled. Choose Install or Download update to try again.");return {cancelled:true};}
+      throw error;
     } finally {
-      downloadController = null;
+      downloadController = null;downloadPhase=null;
       send();
     }
   }
   async function checkUpdates() {
     if (!options.catalog) await refreshCatalog();
-    const available = updatesFor(await store.state(), catalog, store.target);
+    const installed=await store.state();
+    const available = updatesFor(installed, catalog, store.target);
     if (settings.autoUpdates)
       for (const t of available) {
         try {
+          if((t.capabilities||[]).some(capability=>!installed.tools[t.id].manifest.capabilities.includes(capability)))throw Error("Review the new permissions in Downloads & updates before downloading this update.");
           await install({ id: t.id, update: true });
         } catch (e) {
           announce(`${t.name}: ${e.message}`);
@@ -234,6 +257,7 @@ async function launch(options = {}) {
           catalogStatus,
           settings,
           installing: Boolean(downloadController) || store.busy,
+          canCancelDownload:downloadPhase==="downloading",
           activity,
           running: await host.status(),
           selected: host.selected,
@@ -246,8 +270,9 @@ async function launch(options = {}) {
       case "install":
         return install(args);
       case "download.cancel":
-        downloadController?.abort();
-        return true;
+        if(!downloadController||downloadPhase!=="downloading")throw Error("The download has finished. Wait for package verification to complete.");
+        downloadController.abort();
+        return {requested:true};
       case "open":
         return host.open(args.id);
       case "close":
@@ -274,11 +299,12 @@ async function launch(options = {}) {
         if (typeof args.autoUpdates !== "boolean")
           throw Error("Choose whether automatic downloads are enabled.");
         settings.autoUpdates = args.autoUpdates;
-        await atomicJSON(settingsFile, settings);
+        await saveSettings();
         return true;
       case "restart":
         if (downloadController || store.busy)
           throw Error("Finish tool downloads before restarting.");
+        await settingsTail;
         await host.dispose();
         app.relaunch();
         quitting = true;
@@ -297,6 +323,7 @@ async function launch(options = {}) {
       case "app.update.install":
         if (appUpdate.status !== "ready") throw Error("Download the suite update before restarting.");
         if (downloadController || store.busy) throw Error("Finish tool downloads before installing the suite update.");
+        await settingsTail;
         await host.dispose();
         quitting=true;
         try { appUpdater().quitAndInstall(false,true); }
@@ -332,6 +359,7 @@ async function launch(options = {}) {
     (async () => {
       if (downloadController || store.busy)
         throw Error("Finish or cancel tool downloads before quitting.");
+      await settingsTail;
       await host.dispose();
       quitting = true;
       app.quit();
@@ -341,8 +369,10 @@ async function launch(options = {}) {
     });
   });
   await window.loadURL(uiURL);
-  let timer;
+  let timer,initialCheck;
   if (!options.catalog) {
+    initialCheck=setTimeout(()=>checkUpdates().catch(error=>announce(error.message)),1000);
+    initialCheck.unref();
     timer = setInterval(
       () => checkUpdates().catch((e) => announce(e.message)),
       6 * 60 * 60 * 1000,
@@ -351,6 +381,7 @@ async function launch(options = {}) {
   }
   app.once("will-quit", () => {
     clearInterval(timer);
+    clearTimeout(initialCheck);
     ipcMain.removeHandler("solutions:request");
   });
   return { window, store, host };

@@ -15,18 +15,22 @@
     "test": "node --test test/*.test.cjs",
     "test:desktop": "node scripts/desktop-test.cjs",
     "package:dir": "electron-builder --dir --publish never",
-    "package": "electron-builder --publish never"
+    "package": "electron-builder --publish never",
+    "package:release": "node scripts/release.cjs",
+    "test:signatures": "node scripts/verify-mac-signing.cjs",
+    "test:packaged": "node scripts/packaged-test.cjs"
   },
   "dependencies": {
-    "@matiq-solutions/sdk": "0.1.1",
-    "@matiq-solutions/runtime": "0.1.1",
-    "@matiq-solutions/shell": "0.1.1",
+    "@matiq-solutions/sdk": "0.1.2",
+    "@matiq-solutions/runtime": "0.1.2",
+    "@matiq-solutions/shell": "0.1.2",
     "electron-updater": "6.8.9"
   },
   "devDependencies": {
     "electron": "45.2.3",
     "electron-builder": "26.18.0",
-    "playwright": "1.64.1"
+    "playwright": "1.64.1",
+    "js-yaml": "4.3.2"
   },
   "build": {
     "appId": "com.matiq.solutions",
@@ -44,7 +48,7 @@
     },
     "mac": {
       "target": [
-        "pkg",
+        "dmg",
         "zip"
       ],
       "minimumSystemVersion": "14.2",
@@ -57,7 +61,8 @@
         "NSScreenCaptureUsageDescription": "Installed tools observe the screen only after your approval.",
         "NSAppleEventsUsageDescription": "Installed tools control applications only after your approval."
       },
-      "artifactName": "MatiQ-Solutions-${version}-mac-${arch}.${ext}"
+      "artifactName": "MatiQ-Solutions-${version}-mac-${arch}.${ext}",
+      "icon": "packages/shell/assets/app-icon.icns"
     },
     "win": {
       "target": [
@@ -82,7 +87,8 @@
         "owner": "GoMatiQ-inc",
         "repo": "matiq-solutions"
       }
-    ]
+    ],
+    "icon": "packages/shell/assets/app-icon.png"
   },
   "engines": {
     "node": ">=22.12.0"

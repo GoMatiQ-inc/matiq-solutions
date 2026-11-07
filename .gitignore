@@ -3,3 +3,5 @@ dist/
 .validation/
 *.mqt
 *.tgz
+__pycache__/
+*.pyc

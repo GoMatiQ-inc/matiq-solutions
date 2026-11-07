@@ -9,7 +9,7 @@ function tool(id,status) {
  const dom={inert:false},entry={id,name:id,dom,requests:new Set(),disposed:false,closing:false};
  entry.view={setVisible(){},setBounds(){},webContents:{isDestroyed:()=>false,executeJavaScript:async script=>vm.runInNewContext(script,{document:{documentElement:dom}})}};
  entry.instance={status,dispose:async()=>{entry.disposed=true;}};
- entry.cleanup=async()=>{};entry.setClosing=value=>{entry.closing=value;};
+ entry.cleanup=async()=>{};entry.isClosing=()=>entry.closing;entry.setClosing=value=>{entry.closing=value;};
  return entry;
 }
 test("a later tool status cannot hide a new unsaved edit in an earlier workspace",async()=>{
@@ -28,4 +28,16 @@ test("a failed activation closes through disposal without calling its broken ren
  entry.activationFailed=true;entry.failureReason="Close to retry cleanup";h.running.set(entry.id,entry);
  const rows=await h.status();assert.equal(rows[0].recovery,true);
  await h.close(entry.id);assert.equal(entry.disposed,true);assert.equal(h.running.size,0);
+});
+
+test("concurrent close requests share one teardown and status does not read a closing renderer",async()=>{
+ const h=host();let finish,disposals=0;
+ const entry=tool("closing",async()=>{if(disposals)throw Error("Renderer is gone");return {busy:false};});
+ entry.instance.dispose=async()=>{disposals++;await new Promise(resolve=>{finish=resolve;});};h.running.set(entry.id,entry);
+ const first=h.close(entry.id);
+ for(let attempt=0;attempt<100&&!finish;attempt++)await new Promise(resolve=>setImmediate(resolve));
+ assert.ok(finish);const second=h.close(entry.id);
+ assert.equal((await h.status())[0].closing,true);
+ await assert.rejects(h.dispose(),/shutdown to finish/);
+ finish();await Promise.all([first,second]);assert.equal(disposals,1);assert.equal(h.running.size,0);
 });

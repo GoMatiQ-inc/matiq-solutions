@@ -6,13 +6,19 @@
   background: #fff !important;
   border-right: 0 !important;
   border-bottom: 1px solid var(--rule) !important;
-  display: block !important;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
-.sidebar .brand,
-.sidebar .sidebar-foot,
-.sidebar .sidebar-bottom {
-  display: none !important;
+.sidebar .brand { display:none !important; }
+.sidebar .sidebar-foot,.sidebar .sidebar-bottom {
+  display:flex !important;flex-direction:row !important;gap:8px;margin:0 !important;padding:0 !important;
 }
+.sidebar .sidebar-foot>strong,.sidebar .sidebar-foot>span,
+.sidebar .sidebar-bottom>strong,.sidebar .sidebar-bottom>span { display:none !important; }
+.sidebar .sidebar-foot>button,.sidebar .sidebar-bottom>button { padding:8px 14px !important;font:inherit; }
+.sidebar .settings-nav { margin-top:0 !important; }
 .sidebar nav {
   display: flex !important;
   flex-direction: row !important;

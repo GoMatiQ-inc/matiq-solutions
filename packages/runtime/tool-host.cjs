@@ -12,6 +12,8 @@ class ToolHost {
     this.emit = emit;
     this.running = new Map();
     this.opening = new Map();
+    this.closing = new Map();
+    this.disposing = false;
     this.selected = null;
     this.window.on("resize", () => this.layout());
   }
@@ -34,6 +36,7 @@ class ToolHost {
     this.layout();
   }
   async open(id) {
+    if(this.disposing||this.closing.has(id))throw Error("Wait for tool shutdown to finish before opening it again.");
     if (!this.running.has(id)) {
       let opening = this.opening.get(id);
       if (!opening) {
@@ -180,6 +183,7 @@ class ToolHost {
         instance,
         cleanup,
         requests,
+        isClosing:()=>closing,
         setClosing: (value) => {
           closing = value;
         },
@@ -191,7 +195,7 @@ class ToolHost {
         // native hooks while failed cleanup may still have live helpers.
         closing=true;
         this.running.set(id, { id, name:m.name, view, instance, cleanup, requests,
-          setClosing:value=>{closing=value;}, activationFailed:true,
+          setClosing:value=>{closing=value;},isClosing:()=>closing, activationFailed:true,
           failureReason:`Startup failed: ${error.message}. Close this tool to retry cleanup: ${shutdownError.message}` });
         throw Error(`Tool startup failed (${error.message}) and cleanup needs retry (${shutdownError.message}). Close this tool to retry cleanup before reopening.`);
       }
@@ -200,9 +204,18 @@ class ToolHost {
     }
   }
   async status() {
-    const rows = [];
-    for (const t of this.running.values())
-      rows.push({ id:t.id,name:t.name,...(t.activationFailed?{busy:true,recovery:true,reason:t.failureReason}:await t.instance.status()) });
+    const rows=[];
+    for(const tool of this.running.values()){
+      let state;
+      const closing=()=>this.closing.has(tool.id)||tool.isClosing?.();
+      if(tool.activationFailed)state={busy:true,recovery:true,reason:tool.failureReason};
+      else if(closing())state={busy:true,closing:true,reason:'Finishing tool shutdown'};
+      else {
+        try{state=await tool.instance.status();}
+        catch(error){if(!closing())throw error;state={busy:true,closing:true,reason:'Finishing tool shutdown'};}
+      }
+      rows.push({id:tool.id,name:tool.name,...state});
+    }
     return rows;
   }
   async assertIdle(id) {
@@ -258,6 +271,12 @@ class ToolHost {
     } catch(error) { await this.unfreeze(tool);throw error; }
   }
   async close(id) {
+    if(this.disposing)throw Error("Wait for suite shutdown to finish.");
+    let operation=this.closing.get(id);
+    if(!operation){operation=this.closeOne(id).finally(()=>this.closing.delete(id));this.closing.set(id,operation);}
+    return operation;
+  }
+  async closeOne(id) {
     const t = await this.prepareClose(id);
     if (!t) return;
     try {
@@ -273,6 +292,8 @@ class ToolHost {
     }
   }
   async dispose() {
+    if(this.disposing||this.closing.size)throw Error("Wait for tool shutdown to finish before restarting or quitting.");
+    this.disposing=true;
     const prepared = [];
     try {
       // Check every tool before gating any IPC: a later busy recording must
@@ -300,7 +321,7 @@ class ToolHost {
     } catch (error) {
       for (const t of this.running.values()) { t.setClosing(Boolean(t.activationFailed));await this.unfreeze(t); }
       throw error;
-    }
+    } finally { this.disposing=false; }
   }
 }
 module.exports = { ToolHost };

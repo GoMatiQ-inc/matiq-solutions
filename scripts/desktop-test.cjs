@@ -5,7 +5,7 @@ const fs = require("node:fs/promises"),
   assert = require("node:assert/strict");
 const { _electron: electron } = require("playwright");
 const { create } = require("@matiq-solutions/sdk/cli.cjs"),
-  { pack, hash } = require("@matiq-solutions/sdk");
+  { pack, hash, sign } = require("@matiq-solutions/sdk");
 const {
   capture,
   captureTree,
@@ -71,6 +71,7 @@ const {
       publishers: { fixture: publicKey },
       catalog: { schema: 1, sequence: 1, tools: [entries[0]] },
       packages,
+      downloadDelayMs:5000,
     };
     async function launch(entry = "desktop-entry.cjs") {
       await fs.writeFile(configFile, JSON.stringify(config));
@@ -116,6 +117,12 @@ const {
       .getByRole("dialog")
       .getByRole("button", { name: "Install", exact: true })
       .click();
+    await page.getByRole("button",{name:"Cancel download",exact:true}).click();
+    await page.getByText("Download cancelled. Choose Install or Download update to try again.",{exact:true}).waitFor();
+    assert.deepEqual((await page.evaluate(()=>window.solutions.request("state"))).installed.tools,{});
+    config.downloadDelayMs=0;await app.evaluate(()=>{globalThis.fixtureConfig.downloadDelayMs=0;});
+    await page.getByRole("button",{name:"Install",exact:true}).click();
+    await page.getByRole("dialog").getByRole("button",{name:"Install",exact:true}).click();
     await page
       .getByText("Local document installed. Choose Open.", { exact: true })
       .waitFor();
@@ -204,11 +211,43 @@ const {
       });
     await closed;
     await request;
-    assert.equal(
-      (await page.evaluate(() => window.solutions.request("state"))).running
-        .length,
-      0,
-    );
+    let closingState;
+    for(let i=0;i<100;i++){
+      closingState=await page.evaluate(()=>window.solutions.request("state"));
+      if(!closingState.running.length)break;
+      assert.equal(closingState.running[0].closing,true);
+      await new Promise(resolve=>setTimeout(resolve,20));
+    }
+    assert.equal(closingState.running.length,0);
+    const signedCatalog={schema:1,sequence:2,expires:new Date(Date.now()+86400000).toISOString(),tools:[entries[1]]};
+    const catalogEnvelope={signed:signedCatalog,publisher:"fixture",signature:sign(signedCatalog,keys.privateKey)};
+    const nextCatalog={...signedCatalog,sequence:3};
+    const nextEnvelope={signed:nextCatalog,publisher:"fixture",signature:sign(nextCatalog,keys.privateKey)};
+    await app.evaluate((_electron,envelopes)=>{
+      const fs=globalThis.fixtureFileSystem,rename=fs.rename,previousFetch=globalThis.fetch;
+      globalThis.fixtureSettingsWrites=0;
+      fs.rename=async(...args)=>{if(String(args[1]).endsWith('settings.json')){globalThis.fixtureSettingsWrites++;if(globalThis.fixtureSettingsWrites===1)await new Promise(resolve=>{globalThis.fixtureReleaseSettings=resolve;});}return rename(...args);};
+      globalThis.fixtureCatalogFetches=0;
+      globalThis.fetch=async()=>new Response(JSON.stringify(envelopes[Math.min(globalThis.fixtureCatalogFetches++,envelopes.length-1)]),{status:200});
+      globalThis.fixtureRestoreSettings=()=>{globalThis.fixtureReleaseSettings?.();fs.rename=rename;globalThis.fetch=previousFetch;};
+    },[catalogEnvelope,nextEnvelope]);
+    const preference=page.evaluate(()=>window.solutions.request("settings",{autoUpdates:false}));
+    for(let i=0;i<100;i++){if(await app.evaluate(()=>Boolean(globalThis.fixtureReleaseSettings)))break;await new Promise(resolve=>setTimeout(resolve,20));}
+    assert.equal(await app.evaluate(()=>Boolean(globalThis.fixtureReleaseSettings)),true);
+    const refreshing=page.evaluate(()=>window.solutions.request("catalog.refresh"));
+    for(let i=0;i<100;i++){if((await page.evaluate(()=>window.solutions.request("state"))).settings.catalogSequence===2)break;await new Promise(resolve=>setTimeout(resolve,20));}
+    const overlappingRefresh=page.evaluate(()=>window.solutions.request("catalog.refresh"));
+    await new Promise(resolve=>setTimeout(resolve,100));
+    assert.equal(await app.evaluate(()=>globalThis.fixtureCatalogFetches),1,"Overlapping catalog refreshes must share one verified response.");
+    assert.equal(await app.evaluate(()=>globalThis.fixtureSettingsWrites),1,"Catalog replay protection must wait behind the pending preference commit.");
+    await app.evaluate(()=>globalThis.fixtureReleaseSettings());await Promise.all([preference,refreshing,overlappingRefresh]);
+    const savedSettings=JSON.parse(await fs.readFile(path.join(config.profile,"settings.json"),"utf8"));
+    assert.equal(savedSettings.autoUpdates,false);assert.equal(savedSettings.catalogSequence,2);
+    await page.evaluate(()=>window.solutions.request("catalog.refresh"));
+    assert.equal((await page.evaluate(()=>window.solutions.request("state"))).catalog.sequence,3);
+    assert.equal(JSON.parse(await fs.readFile(path.join(config.profile,"catalog.json"),"utf8")).signed.sequence,3);
+    await app.evaluate(()=>globalThis.fixtureRestoreSettings());
+    console.log("PASS: overlapping preference and catalog writes preserve the latest replay-protection sequence.");
     await close();
     config.catalog.tools = [entries[1]];
     page = await launch();
@@ -304,7 +343,7 @@ const {
     for(let i=0;i<100;i++){if(await app.evaluate(()=>Boolean(globalThis.fixtureStandalone)))break;await new Promise(resolve=>setTimeout(resolve,50));}
     await app.evaluate(()=>{
       const tool=globalThis.fixtureStandalone,original=tool.instance.status;let edited=false;
-      tool.instance.status=async()=>{const snapshot=await original();if(!edited){edited=true;await tool.window.webContents.executeJavaScript("document.querySelector('textarea').value='An edit arriving during the close check.'");}return snapshot;};
+      tool.instance.status=async()=>{const snapshot=await original();if(!edited){edited=true;await tool.window.webContents.executeJavaScript("document.querySelector('textarea').value='An edit arriving during the close check.';document.querySelector('textarea').dispatchEvent(new Event('input',{bubbles:true}))");}return snapshot;};
     });
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].close());
     for(let i=0;i<100;i++){if(await app.evaluate(()=>Boolean(globalThis.fixtureCloseError)))break;await new Promise(resolve=>setTimeout(resolve,50));}
@@ -335,6 +374,7 @@ const {
     if(!restarted.length){try{const receipt=JSON.parse(await fs.readFile(path.join(root,"profile/restart-probe.json.ready"),"utf8"));restarted=captureTree(capture({pid:receipt.pid}));}catch(error){if(error.code!=="ENOENT")console.error("Restart cleanup inspection:",error.message);}}
     if(restarted.length){await fs.writeFile(path.join(root,"profile/restart-probe.json.stop"),"");for(const owned of restarted){try{process.kill(owned.pid,"SIGTERM");}catch(error){if(error.code!=="ESRCH")throw error;}}for(const owned of restarted)await verifyStopped(owned);}
     if (app) {
+      await app.evaluate(()=>globalThis.fixtureRestoreSettings?.()).catch(error=>console.error("Settings fixture restoration failed:",error.message));
       owned = captureTree(capture(app.process()));
       try {
         await app.close();
