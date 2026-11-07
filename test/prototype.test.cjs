@@ -228,3 +228,30 @@ test("building an existing tool without a prototype creates its own draft first"
     /Original renderer/,
   );
 });
+
+test("new tool scaffolds keep generated output and local registration out of Git", async (t) => {
+  const f = await fixture(t),
+    root = path.join(f.root, "ignored-starter");
+  await require("../packages/sdk/cli.cjs").create(root, {
+    id: "com.matiq.ignored",
+    name: "Ignored starter",
+    suite: f.suite,
+  });
+  const cp = require("node:child_process");
+  cp.execFileSync("git", ["init", "-q", root]);
+  for (const file of [
+    ".prototype/index.html",
+    "prototype/registration.local.json",
+    "prototype/last-build.local.json",
+  ]) {
+    assert.equal(
+      cp.spawnSync("git", ["check-ignore", file], { cwd: root }).status,
+      0,
+      file,
+    );
+  }
+  assert.match(
+    await fs.readFile(path.join(f.suite, ".gitignore"), "utf8"),
+    /prototype\/tools\.local\.json/,
+  );
+});

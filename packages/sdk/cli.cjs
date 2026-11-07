@@ -80,7 +80,7 @@ async function create(
     "AGENTS.md": "# Prototype first\n\nBefore implementation, create or update prototype/ using this repository's existing renderer and the pinned MatiQ desktop shell. Run matiq-tool prototype build --suite <solutions-checkout> to register it in the suite. Review standalone and hosted modes. Wait for explicit owner approval before applying the design or starting production work. Feedback alone is not approval. Record only the actual approval instruction. Never maintain a duplicate tool implementation in the suite repository; keep generated .prototype output and local machine paths out of Git. Browser mocks do not qualify native behavior.\n",
     "README.md": "# " + name + "\n\nThis tool starts as a draft prototype. Run npm run prototype -- --suite <solutions-checkout>, serve the generated suite export through your approved preview service, and review both shell modes. Set MATIQ_SOLUTIONS_PROTOTYPE to reuse your suite checkout. Edit the renderer once in this repository; prototype/bridge.js simulates desktop operations. Do not implement or package the reviewed design until the owner explicitly approves it. See AGENTS.md.\n",
     "LICENSE": await fs.readFile(path.join(__dirname,"LICENSE"),"utf8"),
-    ".gitignore": "node_modules/\ndist/\n*.mqt\n",
+    ".gitignore": "node_modules/\ndist/\n*.mqt\n.prototype/\nprototype/registration.local.json\nprototype/last-build.local.json\n",
     "src/main.cjs":
       "require('@matiq-solutions/runtime/standalone.cjs').launch({root:require('node:path').join(__dirname,'..')}).catch(error=>{require('electron').dialog.showErrorBox('Could not start',error.message);require('electron').app.quit();});\n",
     "src/preload.cjs":
