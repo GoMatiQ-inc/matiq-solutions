@@ -14,6 +14,7 @@ const mqPreview = {
   recording: false,
   messages: [],
   autoUpdate: true,
+  settingsApp: "general",
 };
 function solutionsPrototype(root) {
   const s = mqPreview,
@@ -35,6 +36,7 @@ function solutionsPrototype(root) {
     ];
   tools.forEach((t) => {
     t.id = t.toolId || t.id;
+    t.name = t.name.replace(/^MatiQ\s+/, "");
   });
   const n = (tag, text, cls) => el(tag, text, cls),
     draw = () => solutionsPrototype(root),
@@ -52,18 +54,22 @@ function solutionsPrototype(root) {
       draw();
     };
   const contextId = () =>
-    s.detail
-      ? "tool-details"
-      : tools.some((t) => t.id === s.page)
-        ? ["com.matiq.voice", "com.matiq.companion"].includes(s.page)
-          ? s.page.split(".").at(-1) + "-workspace"
-          : "general"
-        : s.page;
+    s.page === "settings" &&
+    ["com.matiq.voice", "com.matiq.companion"].includes(s.settingsApp)
+      ? s.settingsApp.split(".").at(-1) + "-workspace"
+      : s.detail
+        ? "tool-details"
+        : tools.some((t) => t.id === s.page)
+          ? ["com.matiq.voice", "com.matiq.companion"].includes(s.page)
+            ? s.page.split(".").at(-1) + "-workspace"
+            : "general"
+          : s.page;
+  root._mqToolCleanup?.();
   root.replaceChildren();
   const bar = n("div", undefined, "mq-reviewbar");
   bar.append(
-    n("strong", "UI prototype · v6"),
-    n("span", "Installed tool interfaces · Prototype only"),
+    n("strong", "UI prototype · v7"),
+    n("span", "Compact navigation & settings · Prototype only"),
     b("Feedback" + (entries.length ? " · " + entries.length : ""), () => {
       s.review = !s.review;
       draw();
@@ -159,15 +165,52 @@ function solutionsPrototype(root) {
     }
     return svg;
   }
-  const launcher = b("", () => {
-    menu.togglePopover();
-  });
+  const launcher = b("", () => {});
+  launcher.setAttribute("popovertarget", "mq-app-launcher");
+  launcher.setAttribute("popovertargetaction", "toggle");
   launcher.className = "mq-launcher";
   launcher.setAttribute("aria-label", "Open app launcher");
   launcher.setAttribute("aria-expanded", "false");
   launcher.setAttribute("aria-controls", "mq-app-launcher");
   launcher.title = "Your apps";
   launcher.append(svgIcon("launcher"));
+  let toolNavigation = null;
+  const currentTool = tools.find((t) => t.id === s.page);
+  if (currentTool && s.toolMode === "hosted") {
+    toolNavigation = n("nav", undefined, "mq-tool-navigation");
+    toolNavigation.setAttribute("aria-label", currentTool.name + " navigation");
+    head.append(toolNavigation);
+    const gear = b("", () => {
+      s.settingsApp = currentTool.id;
+      move("settings");
+    });
+    gear.className = "mq-app-settings";
+    gear.setAttribute("aria-label", currentTool.name + " settings");
+    gear.title = currentTool.name + " settings";
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute(
+      "d",
+      "M9.5 3h5l.6 2.5 2 .9 2.3-.8 2.5 4.3-1.8 1.8v2.6l1.8 1.8-2.5 4.3-2.3-.8-2 .9-.6 2.5h-5l-.6-2.5-2-.9-2.3.8-2.5-4.3 1.8-1.8v-2.6L1.7 9.9l2.5-4.3 2.3.8 2-.9L9.5 3Z",
+    );
+    path.setAttribute("transform", "translate(0 -1) scale(1 .96)");
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.4");
+    path.setAttribute("stroke-linejoin", "round");
+    const circle = document.createElementNS(svg.namespaceURI, "circle");
+    circle.setAttribute("cx", "12");
+    circle.setAttribute("cy", "12");
+    circle.setAttribute("r", "3");
+    circle.setAttribute("fill", "none");
+    circle.setAttribute("stroke", "currentColor");
+    circle.setAttribute("stroke-width", "1.5");
+    svg.append(path, circle);
+    gear.append(svg);
+    head.append(gear);
+  }
   head.append(launcher);
   const menu = n("div", undefined, "mq-appmenu");
   menu.id = "mq-app-launcher";
@@ -212,6 +255,7 @@ function solutionsPrototype(root) {
     link.onclick = (e) => {
       e.preventDefault();
       menu.hidePopover();
+      if (id === "settings") s.settingsApp = "general";
       move(id);
     };
     links.append(link);
@@ -224,6 +268,35 @@ function solutionsPrototype(root) {
     const msg = n("p", s.notice, "mq-notice");
     msg.setAttribute("role", "status");
     main.append(msg);
+  }
+  function toolFrame(tool, view) {
+    const frame = n("iframe");
+    frame.className = "mq-installed-tool";
+    frame.title =
+      tool.name + (view === "settings" ? " settings" : " workspace");
+    const mode = view === "settings" ? "hosted" : s.toolMode;
+    const entry =
+      tool.prototype || "solutions-prototype/" + tool.id + "/src/ui/index.html";
+    frame.src = entry + "?mode=" + mode;
+    frame.setAttribute(
+      "sandbox",
+      "allow-scripts allow-same-origin allow-modals allow-forms",
+    );
+    frame.setAttribute(
+      "allow",
+      "microphone 'none'; camera 'none'; display-capture 'none'; clipboard-read 'none'; clipboard-write 'none'",
+    );
+    if (mode === "hosted")
+      root._mqToolCleanup = mountPrototypeTool({
+        frame,
+        navigation: view === "app" ? toolNavigation : null,
+        view,
+        stylesheet: new URL(
+          "../../tool-frame.css",
+          new URL(entry, location.href),
+        ).href,
+      });
+    return frame;
   }
   function install(t) {
     const d = n("dialog", undefined, "mq-preview-dialog");
@@ -566,63 +639,70 @@ function solutionsPrototype(root) {
       ),
     );
   } else if (s.page === "settings") {
-    main.append(
-      n("h2", "Local by default."),
-      b("Downloads & updates", () => move("updates")),
-    );
-    const label = n("label", undefined, "mq-setting"),
-      check = n("input");
-    check.type = "checkbox";
-    check.checked = s.autoUpdate;
-    check.onchange = () => {
-      s.autoUpdate = check.checked;
-    };
-    label.append(
-      check,
-      document.createTextNode(
-        " Download compatible updates for installed tools automatically",
-      ),
-    );
-    main.append(
-      label,
-      n(
-        "p",
-        "Projects and models stay on this computer. Uninstalling tools preserves your work.",
-      ),
-      n("p", "Suite version 0.1.1 · darwin-arm64"),
-      n(
-        "p",
-        "Prototype only: installed app settings are unchanged.",
-        "mq-caption",
-      ),
-      b("Check for app updates", () => {
-        s.notice = "Prototype: app update check complete.";
+    const tabs = n("nav", undefined, "mq-settings-tabs");
+    tabs.setAttribute("aria-label", "Settings sections");
+    for (const [id, label] of [
+      ["general", "Solutions"],
+      ...tools.filter((t) => s.installed.has(t.id)).map((t) => [t.id, t.name]),
+    ]) {
+      const tab = b(label, () => {
+        s.settingsApp = id;
         draw();
-      }),
+      });
+      tab.setAttribute("aria-current", s.settingsApp === id ? "page" : "false");
+      tabs.append(tab);
+    }
+    main.append(tabs);
+    const selected = tools.find(
+      (t) => t.id === s.settingsApp && s.installed.has(t.id),
     );
+    if (selected) {
+      main.classList.add("mq-app-settings-page");
+      main.append(toolFrame(selected, "settings"));
+    } else {
+      main.append(
+        n("h2", "Local by default."),
+        b("Downloads & updates", () => move("updates")),
+      );
+      const label = n("label", undefined, "mq-setting"),
+        check = n("input");
+      check.type = "checkbox";
+      check.checked = s.autoUpdate;
+      check.onchange = () => {
+        s.autoUpdate = check.checked;
+      };
+      label.append(
+        check,
+        document.createTextNode(
+          " Download compatible updates for installed tools automatically",
+        ),
+      );
+      main.append(
+        label,
+        n(
+          "p",
+          "Projects and models stay on this computer. Uninstalling tools preserves your work.",
+        ),
+        n("p", "Suite version 0.1.1 · darwin-arm64"),
+        n(
+          "p",
+          "Prototype only: installed app settings are unchanged.",
+          "mq-caption",
+        ),
+        b("Check for app updates", () => {
+          s.notice = "Prototype: app update check complete.";
+          draw();
+        }),
+      );
+    }
   } else if (tools.some((t) => t.id === s.page)) {
     main.classList.add("mq-tool-workspace");
-    const frame = n("iframe");
-    frame.className = "mq-installed-tool";
-    frame.title =
-      (tools.find((t) => t.id === s.page)?.name || "Tool") +
-      " installed " +
-      (s.toolMode === "hosted" ? "suite" : "standalone") +
-      " interface";
-    frame.src =
-      (tools.find((t) => t.id === s.page)?.prototype ||
-        "solutions-prototype/" + s.page + "/src/ui/index.html") +
-      "?mode=" +
-      s.toolMode;
-    frame.setAttribute(
-      "sandbox",
-      "allow-scripts allow-same-origin allow-modals allow-forms",
+    main.append(
+      toolFrame(
+        tools.find((t) => t.id === s.page),
+        "app",
+      ),
     );
-    frame.setAttribute(
-      "allow",
-      "microphone 'none'; camera 'none'; display-capture 'none'; clipboard-read 'none'; clipboard-write 'none'",
-    );
-    main.append(frame);
   }
   work.append(main);
   root.append(work);
