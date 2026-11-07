@@ -2,11 +2,12 @@
 const fs = require("node:fs/promises"),
   path = require("node:path");
 const { pack, validateManifest } = require("./index.cjs");
+const prototype = require("./prototype.cjs");
 const sdkVersion = require("./package.json").version;
 const sdkAsset = name => `https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v${sdkVersion}/matiq-solutions-${name}-${sdkVersion}.tgz`;
 async function create(
   destination,
-  { id = "com.matiq.newtool", name = "New tool" } = {},
+  { id = "com.matiq.newtool", name = "New tool", suite } = {},
 ) {
   const manifest = {
     schema: 1,
@@ -47,6 +48,10 @@ async function create(
           main: "src/main.cjs",
           scripts: {
             start: "electron .",
+            prestart: "matiq-tool prototype check",
+            prepackage: "matiq-tool prototype check",
+            prototype: "matiq-tool prototype build",
+            "prototype:check": "matiq-tool prototype check",
             package: "electron-builder --publish never",
             "tool:validate": "matiq-tool validate",
             "tool:pack": "matiq-tool pack --output tool.mqt",
@@ -72,6 +77,8 @@ async function create(
         null,
         2,
       ) + "\n",
+    "AGENTS.md": "# Prototype first\n\nBefore implementation, create or update prototype/ using this repository's existing renderer and the pinned MatiQ desktop shell. Run matiq-tool prototype build --suite <solutions-checkout> to register it in the suite. Review standalone and hosted modes. Wait for explicit owner approval before applying the design or starting production work. Feedback alone is not approval. Record only the actual approval instruction. Never maintain a duplicate tool implementation in the suite repository; keep generated .prototype output and local machine paths out of Git. Browser mocks do not qualify native behavior.\n",
+    "README.md": "# " + name + "\n\nThis tool starts as a draft prototype. Run npm run prototype -- --suite <solutions-checkout>, serve the generated suite export through your approved preview service, and review both shell modes. Set MATIQ_SOLUTIONS_PROTOTYPE to reuse your suite checkout. Edit the renderer once in this repository; prototype/bridge.js simulates desktop operations. Do not implement or package the reviewed design until the owner explicitly approves it. See AGENTS.md.\n",
     "LICENSE": await fs.readFile(path.join(__dirname,"LICENSE"),"utf8"),
     ".gitignore": "node_modules/\ndist/\n*.mqt\n",
     "src/main.cjs":
@@ -109,11 +116,18 @@ save.onclick=async()=>{save.disabled=true;const snapshot=text.value;try{await wi
   };
   for (const [name, data] of Object.entries(files))
     await fs.writeFile(path.join(destination, name), data);
+  await prototype.init(destination, {suite});
+  await prototype.build(destination);
+  if (suite) await prototype.buildSuite(suite);
   return manifest;
 }
 async function main(args) {
   const command = args[0],
     value = (flag) => args[args.indexOf(flag) + 1];
+  if (command === "prototype") {
+    console.log(JSON.stringify(await prototype.main(args.slice(1)), null, 2));
+    return;
+  }
   if (command === "create") {
     if (!args[1])
       throw Error(
@@ -122,9 +136,10 @@ async function main(args) {
     await create(path.resolve(args[1]), {
       id: args.includes("--id") ? value("--id") : undefined,
       name: args.includes("--name") ? value("--name") : undefined,
+      suite: args.includes("--suite") ? path.resolve(value("--suite")) : process.env.MATIQ_SOLUTIONS_PROTOTYPE,
     });
     console.log(
-      "Created standalone/suite tool. Keep its implementation in this repository.",
+      "Created draft standalone/suite prototype. Keep its implementation in this repository. Review both shell modes and obtain explicit owner approval before implementation or packaging. Run prototype build --suite <suite-checkout> to register/update Solutions.",
     );
     return;
   }
@@ -138,6 +153,7 @@ async function main(args) {
     console.log("Tool manifest and entry files are valid.");
     return;
   }
+  if (command === "pack-app" || command === "pack") await prototype.approval(root);
   if (command === "pack-app") {
     if (!process.env.MATIQ_TOOL_SIGNING_KEY) throw Error("Supply MATIQ_TOOL_SIGNING_KEY through the release signing environment.");
     const result = await require("./package-app.cjs").packApp({
@@ -171,7 +187,7 @@ async function main(args) {
     console.log(JSON.stringify(result));
     return;
   }
-  throw Error("Use create, validate, pack or pack-app.");
+  throw Error("Use create, prototype, validate, pack or pack-app.");
 }
 if (require.main === module)
   main(process.argv.slice(2)).catch((e) => {

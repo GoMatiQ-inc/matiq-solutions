@@ -54,3 +54,26 @@ Use `--extra engine,native` for additional resource directories outside `app.asa
 The shell package supplies the company wordmark, fonts and native app icons. Scaffolds reference those package assets rather than maintaining another copy. Hosted tool navigation keeps functional setup and settings controls visible.
 
 For company Mac releases, use `withMacKeychain` from `@matiq-solutions/sdk/mac-keychain.cjs` and call `withNotaryProfile` from `@matiq-solutions/sdk/notary-profile.cjs` inside its operation. Build configuration is validated before entering the credential wrappers. The existing P12 credentials are imported into a temporary keychain; notarization uses a short-lived profile in that same keychain. Passwords travel through protected stdin/secure terminal prompts, not command arguments. Both wrappers restore their environment in `finally`, and the outer wrapper removes the temporary keychain. DMG/ZIP callers pass `{requireInstaller:false}`; PKG callers retain the default requirement for both identities. These are release-time helpers, not end-user runtime requirements.
+
+## Prototype-first workflow (SDK 0.1.4)
+
+Use the MatiQ Solutions desktop SDK, not the separate Go MatiQ platform feature SDK. A new tool starts as a repository-owned draft prototype. Reuse the exact shared standalone shell and hosted shell; use real renderer source with a simulated desktop bridge. Never duplicate maintained tool UI in the suite repository.
+
+```sh
+matiq-tool create my-canvas --id com.matiq.canvas --name "MatiQ Canvas" --suite ../matiq-solutions
+# Existing tool without a prototype:
+matiq-tool prototype init --suite ../matiq-solutions
+# Rebuild this tool and the suite preview after an edit:
+matiq-tool prototype build --suite ../matiq-solutions
+# After explicit owner approval of both standalone and hosted views only:
+matiq-tool prototype approve --by "Owner" --approval-text "Actual explicit owner instruction"
+matiq-tool prototype check
+```
+
+Set `MATIQ_SOLUTIONS_PROTOTYPE` to the local suite checkout instead of repeating `--suite`. Without a suite checkout, create still makes a draft prototype; registration remains required before approval. `prototype/manifest.json`, `bridge.js`, explicit mock module overrides and the approval record belong in the tool repo. `prototype/tools.json` belongs in the suite and contains repository metadata only; local checkout paths and generated `.prototype/` output are ignored. `prototype build --suite` automatically registers the tool and rebuilds the suite artifact. Do not commit export copies.
+
+Feedback is not permission to implement. Only record approval after the owner explicitly requests application of the reviewed design. Changed renderer, bridge, manifest or shared-shell files invalidate that approval. `pack` and `pack-app`, and the generated tool's prestart/prepackage checks, require current approval. This is an auditable workflow gate, not an identity or authorization service. Existing signed releases remain unchanged. Browser prototype tests do not qualify native capture, inference, installers or OS grants.
+
+### Prompt for a new tool build
+
+> Build this as a MatiQ Solutions desktop tool in its own repository using the current desktop SDK. Start with the prototype process. Reuse the exact shared standalone shell and Solutions shell. If a prototype is missing, create its repository-owned prototype and register/build it into the existing Solutions prototype. Keep one tool renderer implementation; simulate native operations through a prototype bridge. Save the prototype source and iteration instructions in Git. Show standalone and suite views for review and wait for my explicit instruction before applying the design or implementing production behavior. Feedback alone is not approval. Keep installation opt-in, run/data local, and installed-tool updates independent.
