@@ -21,7 +21,7 @@ async function run(fn) {
     await refresh();
   } catch (e) {
     $("#error").hidden = false;
-    $("#error").textContent = e.message;
+    $("#error").textContent = e.message.replace(/^Error invoking remote method '[^']+': Error: /, "");
   }
 }
 function confirmInstall(tool, update = false) {
