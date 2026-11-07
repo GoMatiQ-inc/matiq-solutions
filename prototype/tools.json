@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "tools": [
+    {
+      "id": "com.matiq.companion",
+      "name": "MatiQ Companion",
+      "repository": "https://github.com/GoMatiQ-inc/matiq-companion",
+      "manifest": "prototype/manifest.json"
+    },
+    {
+      "id": "com.matiq.voice",
+      "name": "MatiQ Voice",
+      "repository": "https://github.com/GoMatiQ-inc/matiq-voice",
+      "manifest": "prototype/manifest.json"
+    }
+  ]
+}
