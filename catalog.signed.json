@@ -1,8 +1,8 @@
 {
   "signed": {
     "schema": 1,
-    "sequence": 1794042311198,
-    "expires": "2026-11-14T09:05:11.198Z",
+    "sequence": 1794044211286,
+    "expires": "2026-11-14T09:36:51.286Z",
     "tools": [
       {
         "schema": 1,
@@ -39,7 +39,7 @@
         "id": "com.matiq.companion",
         "name": "MatiQ Companion",
         "description": "Chat with local models, attach files and choose the tools each conversation can use.",
-        "version": "0.1.4",
+        "version": "0.1.5",
         "capabilities": [
           "files",
           "network",
@@ -54,14 +54,14 @@
         ],
         "packages": {
           "darwin-arm64": {
-            "url": "https://github.com/GoMatiQ-inc/matiq-companion/releases/download/v0.1.4/MatiQ-Companion-0.1.4-darwin-arm64.mqt",
-            "bytes": 89445629,
-            "sha256": "a35b45a32f8d052a2feff0c5c10401978d1fc2e997862050974acf619aa00f75"
+            "url": "https://github.com/GoMatiQ-inc/matiq-companion/releases/download/v0.1.5/MatiQ-Companion-0.1.5-darwin-arm64.mqt",
+            "bytes": 89446099,
+            "sha256": "9917b99cb7466246e3fbbb21297a05dbe748849c8d78140effbe64ec8a73495a"
           },
           "darwin-x64": {
-            "url": "https://github.com/GoMatiQ-inc/matiq-companion/releases/download/v0.1.4/MatiQ-Companion-0.1.4-darwin-x64.mqt",
-            "bytes": 101892822,
-            "sha256": "1788973bee8a87c010cd54fee7110313ca5decbb4858fe208a5c2ffaa624f9ed"
+            "url": "https://github.com/GoMatiQ-inc/matiq-companion/releases/download/v0.1.5/MatiQ-Companion-0.1.5-darwin-x64.mqt",
+            "bytes": 101893268,
+            "sha256": "0559914e3ccecc083b26ccb1d370fc30bebfc98c9cb46be46f38dcdb44414257"
           }
         },
         "source": "https://github.com/GoMatiQ-inc/matiq-companion",
@@ -70,5 +70,5 @@
     ]
   },
   "publisher": "matiq-solutions-release-v1",
-  "signature": "0ktIRG4hZqAw4oQvm7DvZTSs+R2T4Gl9iRoKce24n6be7zwUb2WeZhNjuVGu72YCp+IIPxSnaCV8a9iqpp2YAg=="
+  "signature": "BgKyYW+t/waVaqP+L/S0ivB8dKqi3OWTpChmX60gU2QAQu9NmTfa3qLLfyIszjeoq0edRltL/NcPwomxt642Dg=="
 }
