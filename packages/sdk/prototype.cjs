@@ -79,8 +79,30 @@ async function shellRoot(root, explicit) {
     );
   }
 }
+async function ignoreGenerated(root, entries) {
+  const file = path.join(root, ".gitignore");
+  const current = await fs.readFile(file, "utf8").catch((error) => {
+    if (error.code === "ENOENT") return "";
+    throw error;
+  });
+  const lines = current.split(/\r?\n/);
+  const missing = entries.filter((entry) => !lines.includes(entry));
+  if (missing.length)
+    await fs.writeFile(
+      file,
+      current +
+        (current && !current.endsWith("\n") ? "\n" : "") +
+        missing.join("\n") +
+        "\n",
+    );
+}
 async function init(root, { bridge, suite } = {}) {
   const tool = await read(path.join(root, "matiq-tool.json"));
+  await ignoreGenerated(root, [
+    ".prototype/",
+    "prototype/registration.local.json",
+    "prototype/last-build.local.json",
+  ]);
   const dest = path.join(root, "prototype/manifest.json");
   if (!(await exists(dest)))
     await write(dest, {
@@ -199,6 +221,7 @@ async function register(root, suite) {
     );
   const c = await config(root);
   await fs.access(path.join(suite, "prototype/shell.js"));
+  await ignoreGenerated(suite, [".prototype/", "prototype/tools.local.json"]);
   let repository;
   try {
     repository = execFileSync("git", ["remote", "get-url", "origin"], {

@@ -23,9 +23,9 @@
     "prototype": "node packages/sdk/cli.cjs prototype suite"
   },
   "dependencies": {
-    "@matiq-solutions/sdk": "0.1.4",
-    "@matiq-solutions/runtime": "0.1.4",
-    "@matiq-solutions/shell": "0.1.4",
+    "@matiq-solutions/sdk": "0.1.5",
+    "@matiq-solutions/runtime": "0.1.5",
+    "@matiq-solutions/shell": "0.1.5",
     "electron-updater": "6.8.9"
   },
   "devDependencies": {

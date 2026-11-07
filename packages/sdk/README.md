@@ -55,7 +55,7 @@ The shell package supplies the company wordmark, fonts and native app icons. Sca
 
 For company Mac releases, use `withMacKeychain` from `@matiq-solutions/sdk/mac-keychain.cjs` and call `withNotaryProfile` from `@matiq-solutions/sdk/notary-profile.cjs` inside its operation. Build configuration is validated before entering the credential wrappers. The existing P12 credentials are imported into a temporary keychain; notarization uses a short-lived profile in that same keychain. Passwords travel through protected stdin/secure terminal prompts, not command arguments. Both wrappers restore their environment in `finally`, and the outer wrapper removes the temporary keychain. DMG/ZIP callers pass `{requireInstaller:false}`; PKG callers retain the default requirement for both identities. These are release-time helpers, not end-user runtime requirements.
 
-## Prototype-first workflow (SDK 0.1.4)
+## Prototype-first workflow (SDK 0.1.5)
 
 Use the MatiQ Solutions desktop SDK, not the separate Go MatiQ platform feature SDK. A new tool starts as a repository-owned draft prototype. Reuse the exact shared standalone shell and hosted shell; use real renderer source with a simulated desktop bridge. Never duplicate maintained tool UI in the suite repository.
 
@@ -77,3 +77,5 @@ Feedback is not permission to implement. Only record approval after the owner ex
 ### Prompt for a new tool build
 
 > Build this as a MatiQ Solutions desktop tool in its own repository using the current desktop SDK. Start with the prototype process. Reuse the exact shared standalone shell and Solutions shell. If a prototype is missing, create its repository-owned prototype and register/build it into the existing Solutions prototype. Keep one tool renderer implementation; simulate native operations through a prototype bridge. Save the prototype source and iteration instructions in Git. Show standalone and suite views for review and wait for my explicit instruction before applying the design or implementing production behavior. Feedback alone is not approval. Keep installation opt-in, run/data local, and installed-tool updates independent.
+
+SDK 0.1.5 also adds the generated-output and local-registration ignore rules automatically for new and initialized tools, and protects the suite’s local checkout map. Existing approved source and prototype bridges are not overwritten. Use the same explicit shared-shell path when building/checking an existing tool against a different installed shell version. CI packaging must restore the matching registered suite checkout before checking an existing approval; never synthesize an owner approval in CI.
