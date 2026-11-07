@@ -603,7 +603,7 @@ function solutionsPrototype(root) {
       s.toolMode;
     frame.setAttribute(
       "sandbox",
-      "allow-scripts allow-same-origin allow-modals",
+      "allow-scripts allow-same-origin allow-modals allow-forms",
     );
     frame.setAttribute(
       "allow",
