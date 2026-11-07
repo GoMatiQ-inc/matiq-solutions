@@ -2,6 +2,7 @@ const fs = require("node:fs/promises"),
   path = require("node:path"),
   crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
+const { validToolId } = require("./index.cjs");
 const read = async (p) => JSON.parse(await fs.readFile(p, "utf8"));
 const exists = async (p) =>
   fs.access(p).then(
@@ -43,8 +44,7 @@ async function config(root) {
   const c = await read(path.join(root, "prototype/manifest.json"));
   if (
     c.schema !== 1 ||
-    typeof c.id !== "string" ||
-    !/^[a-z][a-z0-9]*(?:\.[a-z0-9]+)+$/.test(c.id) ||
+    !validToolId(c.id) ||
     !Array.isArray(c.roots) ||
     !c.roots.length
   )
@@ -67,7 +67,9 @@ async function shellRoot(root, explicit) {
   }
   try {
     return path.dirname(
-      require.resolve("@matiq-solutions/shell/package.json", { paths: [root, __dirname] }),
+      require.resolve("@matiq-solutions/shell/package.json", {
+        paths: [root, __dirname],
+      }),
     );
   } catch {
     const local = path.join(__dirname, "../shell");

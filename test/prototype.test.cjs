@@ -172,9 +172,59 @@ test("explicit capture override changes only generated preview output, never pro
   );
 });
 
-test('changing the reviewed Solutions shell invalidates a tool approval', async t=>{
- const f=await fixture(t);await p.init(f.tool,{suite:f.suite});await p.build(f.tool,{shell:f.shell});await p.approve(f.tool,{shell:f.shell,by:'Fixture owner',text:'Fixture-only suite design approval'});await fs.appendFile(path.join(f.suite,'prototype/shell.js'),'\n// revised suite shell');await assert.rejects(p.approval(f.tool,{shell:f.shell}),/missing or stale/);
+test("changing the reviewed Solutions shell invalidates a tool approval", async (t) => {
+  const f = await fixture(t);
+  await p.init(f.tool, { suite: f.suite });
+  await p.build(f.tool, { shell: f.shell });
+  await p.approve(f.tool, {
+    shell: f.shell,
+    by: "Fixture owner",
+    text: "Fixture-only suite design approval",
+  });
+  await fs.appendFile(
+    path.join(f.suite, "prototype/shell.js"),
+    "\n// revised suite shell",
+  );
+  await assert.rejects(
+    p.approval(f.tool, { shell: f.shell }),
+    /missing or stale/,
+  );
 });
-test('new-tool packaging commands fail at the draft gate before signing',async t=>{
- const f=await fixture(t),root=path.join(f.root,'fresh-tool');await require('../packages/sdk/cli.cjs').create(root,{id:'com.matiq.fresh',name:'Fresh prototype'});const cp=require('node:child_process');for(const command of ['pack','pack-app']){const result=cp.spawnSync(process.execPath,[path.resolve(__dirname,'../packages/sdk/cli.cjs'),command],{cwd:root,encoding:'utf8'});assert.equal(result.status,1);assert.match(result.stderr,/Prototype approval is missing or stale/);}const pkg=JSON.parse(await fs.readFile(path.join(root,'package.json')));assert.equal(pkg.scripts.prestart,'matiq-tool prototype check');assert.equal(pkg.scripts.prepackage,'matiq-tool prototype check');
+test("new-tool packaging commands fail at the draft gate before signing", async (t) => {
+  const f = await fixture(t),
+    root = path.join(f.root, "fresh-tool");
+  await require("../packages/sdk/cli.cjs").create(root, {
+    id: "com.matiq.fresh-prototype",
+    name: "Fresh prototype",
+  });
+  const cp = require("node:child_process");
+  for (const command of ["pack", "pack-app"]) {
+    const result = cp.spawnSync(
+      process.execPath,
+      [path.resolve(__dirname, "../packages/sdk/cli.cjs"), command],
+      { cwd: root, encoding: "utf8" },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Prototype approval is missing or stale/);
+  }
+  const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json")));
+  assert.equal(pkg.scripts.prestart, "matiq-tool prototype check");
+  assert.equal(pkg.scripts.prepackage, "matiq-tool prototype check");
+});
+
+test("building an existing tool without a prototype creates its own draft first", async (t) => {
+  const f = await fixture(t);
+  await p.main(["build", "--shell", f.shell], f.tool);
+  const manifest = JSON.parse(
+      await fs.readFile(path.join(f.tool, "prototype/manifest.json")),
+    ),
+    draft = JSON.parse(
+      await fs.readFile(path.join(f.tool, "prototype/approval.json")),
+    );
+  assert.equal(manifest.id, "com.matiq.test");
+  assert.equal(draft.status, "draft");
+  assert.match(
+    await fs.readFile(path.join(f.tool, ".prototype/src/index.html"), "utf8"),
+    /Original renderer/,
+  );
 });
