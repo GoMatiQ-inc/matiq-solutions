@@ -280,7 +280,10 @@ async function launch(options = {}) {
         return true;
       case "rollback":
         await host.close(args.id);
+        settings.autoUpdates=false;
+        await saveSettings();
         await store.rollback(args.id);
+        announce("Previous tool version restored. Automatic tool downloads are paused; review updates before enabling them in Settings.");
         return true;
       case "hide":
         host.hide();

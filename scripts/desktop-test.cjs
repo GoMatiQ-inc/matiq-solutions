@@ -315,6 +315,15 @@ const {
     await page
       .getByRole("button", { name: "Back to my tools", exact: true })
       .click();
+    page.once("dialog", (d) => {assert.match(d.message(),/pause automatic downloads for all installed tools/);return d.accept();});
+    await page.getByRole("button",{name:"Roll back",exact:true}).click();
+    await page.getByText("Version 0.1.0",{exact:true}).waitFor();
+    const rolledBack=await page.evaluate(()=>window.solutions.request("state"));
+    assert.equal(rolledBack.settings.autoUpdates,false);
+    assert.equal(JSON.parse(await fs.readFile(path.join(config.profile,"settings.json"),"utf8")).autoUpdates,false);
+    assert.equal(rolledBack.installed.tools[manifest.id].version,"0.1.0");
+    assert.equal(rolledBack.installed.tools[manifest.id].pending,undefined);
+    console.log("PASS: rollback restores the previous tool and durably pauses automatic downloads before it can be fetched again.");
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Uninstall", exact: true }).click();
     await page
