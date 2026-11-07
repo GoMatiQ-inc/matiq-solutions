@@ -221,23 +221,31 @@ const {
     assert.equal(closingState.running.length,0);
     const signedCatalog={schema:1,sequence:2,expires:new Date(Date.now()+86400000).toISOString(),tools:[entries[1]]};
     const catalogEnvelope={signed:signedCatalog,publisher:"fixture",signature:sign(signedCatalog,keys.privateKey)};
-    await app.evaluate((_electron,envelope)=>{
+    const nextCatalog={...signedCatalog,sequence:3};
+    const nextEnvelope={signed:nextCatalog,publisher:"fixture",signature:sign(nextCatalog,keys.privateKey)};
+    await app.evaluate((_electron,envelopes)=>{
       const fs=globalThis.fixtureFileSystem,rename=fs.rename,previousFetch=globalThis.fetch;
       globalThis.fixtureSettingsWrites=0;
       fs.rename=async(...args)=>{if(String(args[1]).endsWith('settings.json')){globalThis.fixtureSettingsWrites++;if(globalThis.fixtureSettingsWrites===1)await new Promise(resolve=>{globalThis.fixtureReleaseSettings=resolve;});}return rename(...args);};
-      globalThis.fetch=async()=>new Response(JSON.stringify(envelope),{status:200});
+      globalThis.fixtureCatalogFetches=0;
+      globalThis.fetch=async()=>new Response(JSON.stringify(envelopes[Math.min(globalThis.fixtureCatalogFetches++,envelopes.length-1)]),{status:200});
       globalThis.fixtureRestoreSettings=()=>{globalThis.fixtureReleaseSettings?.();fs.rename=rename;globalThis.fetch=previousFetch;};
-    },catalogEnvelope);
+    },[catalogEnvelope,nextEnvelope]);
     const preference=page.evaluate(()=>window.solutions.request("settings",{autoUpdates:false}));
     for(let i=0;i<100;i++){if(await app.evaluate(()=>Boolean(globalThis.fixtureReleaseSettings)))break;await new Promise(resolve=>setTimeout(resolve,20));}
     assert.equal(await app.evaluate(()=>Boolean(globalThis.fixtureReleaseSettings)),true);
     const refreshing=page.evaluate(()=>window.solutions.request("catalog.refresh"));
     for(let i=0;i<100;i++){if((await page.evaluate(()=>window.solutions.request("state"))).settings.catalogSequence===2)break;await new Promise(resolve=>setTimeout(resolve,20));}
+    const overlappingRefresh=page.evaluate(()=>window.solutions.request("catalog.refresh"));
     await new Promise(resolve=>setTimeout(resolve,100));
+    assert.equal(await app.evaluate(()=>globalThis.fixtureCatalogFetches),1,"Overlapping catalog refreshes must share one verified response.");
     assert.equal(await app.evaluate(()=>globalThis.fixtureSettingsWrites),1,"Catalog replay protection must wait behind the pending preference commit.");
-    await app.evaluate(()=>globalThis.fixtureReleaseSettings());await Promise.all([preference,refreshing]);
+    await app.evaluate(()=>globalThis.fixtureReleaseSettings());await Promise.all([preference,refreshing,overlappingRefresh]);
     const savedSettings=JSON.parse(await fs.readFile(path.join(config.profile,"settings.json"),"utf8"));
     assert.equal(savedSettings.autoUpdates,false);assert.equal(savedSettings.catalogSequence,2);
+    await page.evaluate(()=>window.solutions.request("catalog.refresh"));
+    assert.equal((await page.evaluate(()=>window.solutions.request("state"))).catalog.sequence,3);
+    assert.equal(JSON.parse(await fs.readFile(path.join(config.profile,"catalog.json"),"utf8")).signed.sequence,3);
     await app.evaluate(()=>globalThis.fixtureRestoreSettings());
     console.log("PASS: overlapping preference and catalog writes preserve the latest replay-protection sequence.");
     await close();

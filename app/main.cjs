@@ -61,6 +61,7 @@ async function launch(options = {}) {
     activity = "",
     downloadController = null,
     downloadPhase = null,
+    catalogRefresh = null,
     quitting = false;
   try {
     const envelope = JSON.parse(await fs.readFile(catalogFile, "utf8"));
@@ -137,7 +138,11 @@ async function launch(options = {}) {
     updater.on("error",error=>{quitting=false;appUpdate={status:"error",message:error.message};announce("Suite update: "+error.message);});
     return updater;
   }
-  async function refreshCatalog() {
+  function refreshCatalog(){
+    if(!catalogRefresh)catalogRefresh=loadCatalog().finally(()=>{catalogRefresh=null;});
+    return catalogRefresh;
+  }
+  async function loadCatalog() {
     const response = await fetch(CATALOG_URL, {
       signal: AbortSignal.timeout(30000),
     });

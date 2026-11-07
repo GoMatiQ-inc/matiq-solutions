@@ -11,7 +11,7 @@ const { _electron:electron }=require("playwright"),lifecycle=require("@matiq-sol
   const page=await app.firstWindow();page.setDefaultTimeout(15000);
   owned=lifecycle.captureTree(lifecycle.capture(app.process()));
   const actual=await app.evaluate(({app})=>({profile:app.getPath("userData"),version:app.getVersion(),packaged:app.isPackaged}));
-  assert.equal(path.resolve(actual.profile),path.resolve(profile),"Packaged qualification must use its isolated user-data directory.");
+  assert.equal(await fs.realpath(actual.profile),await fs.realpath(profile),"Packaged qualification must use its isolated user-data directory.");
   assert.equal(actual.packaged,true);
   assert.equal(actual.version,process.env.SOLUTIONS_RELEASE_VERSION||require("../package.json").version);
   await page.getByText("No tools installed. Browse the marketplace to choose your first tool.",{exact:true}).waitFor();
