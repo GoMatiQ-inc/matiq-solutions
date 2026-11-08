@@ -1,6 +1,6 @@
 {
   "name": "@matiq-solutions/sdk",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "main": "index.cjs",
   "license": "SEE LICENSE IN LICENSE",
   "files": [
@@ -12,12 +12,13 @@
     "LICENSE",
     "*.d.ts",
     "README.md",
-    "*.py"
+    "*.py",
+    "NEW_TOOL_PROMPT.md"
   ],
   "dependencies": {
     "adm-zip": "0.6.1",
     "@electron/asar": "4.3.1",
-    "@matiq-solutions/shell": "0.1.5"
+    "@matiq-solutions/shell": "0.1.6"
   },
   "bin": {
     "matiq-tool": "cli.cjs"

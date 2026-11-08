@@ -37,12 +37,12 @@ async function hash(file){const digest=createHash("sha256");for await(const chun
   const env={...process.env};for(const name of Object.keys(env))if(/^(CSC_|APPLE_)|^(MATIQ_TOOL_SIGNING_KEY|GH_TOKEN|GITHUB_TOKEN)$/.test(name))delete env[name];
   app=await electron.launch({executablePath:executable,args:[],env});owned=lifecycle.capture(app.process());for(const stream of [app.process().stdout,app.process().stderr])stream?.on("data",chunk=>{runtimeLog=(runtimeLog+chunk).slice(-20000);});
   assert.equal(await fs.realpath(await app.evaluate(({app})=>app.getPath("userData"))),await fs.realpath(profile));
-  const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.getByRole("button",{name:"Open",exact:true}).click();
+  const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.getByRole("button",{name:"Upgrade document",exact:true}).click();
   const tool=await waitFor(()=>app.context().pages().find(p=>p.url().includes("/src/index.html")),"Installed SDK workspace");await tool.getByLabel("Document",{exact:true}).fill(marker);await tool.getByRole("button",{name:"Save document",exact:true}).click();await expect(tool.getByRole("status")).toHaveText("Saved on this device.");
-  await page.getByRole("button",{name:"Back to my tools",exact:true}).click();await page.evaluate(()=>window.solutions.request("settings",{autoUpdates:false}));
+  await page.getByRole("button",{name:"MatiQ Solutions home",exact:true}).click();await page.evaluate(()=>window.solutions.request("settings",{autoUpdates:false}));
   const document=path.join(profile,"tools",manifest.id,"document.txt"),registry=path.join(profile,"tool-store/installed.json"),before={document:await hash(document),registry:await hash(registry),package:await hash(archive)};
   await app.evaluate((_,url)=>{const updater=process.mainModule.require("electron-updater").autoUpdater;updater.setFeedURL({provider:"generic",url});updater.disableDifferentialDownload=true;},`http://127.0.0.1:${port}/`);
-  await page.getByRole("button",{name:"Settings",exact:true}).click();await page.getByRole("button",{name:"Check for app updates",exact:true}).click();
+  await page.getByRole("button",{name:"Open app launcher",exact:true}).click();await page.getByRole("dialog",{name:"Installed apps"}).getByRole("button",{name:"Settings",exact:true}).click();await page.getByRole("button",{name:"Check for app updates",exact:true}).click();
   await waitFor(()=>page.evaluate(async version=>{const s=(await window.solutions.request("state")).appUpdate;if(s.status==="error")throw Error(s.message);return s.status==="available"&&s.version===version;},targetVersion),"Signed update availability",30000);
   await page.getByRole("button",{name:"Download app update",exact:true}).click();await waitFor(()=>page.evaluate(async()=>{const s=(await window.solutions.request("state")).appUpdate;if(s.status==="error")throw Error(s.message);return s.status==="ready";}),"Signed update download",120000);
   await page.getByRole("button",{name:"Restart to update app",exact:true}).click();
@@ -55,7 +55,7 @@ async function hash(file){const digest=createHash("sha256");for await(const chun
   app=await electron.launch({executablePath:executable,args:[],env});owned=lifecycle.capture(app.process());
   const replacement=await app.firstWindow();replacement.setDefaultTimeout(15000);
   assert.equal(await app.evaluate(({app})=>app.getVersion()),targetVersion);
-  await replacement.getByRole("button",{name:"Open",exact:true}).click();
+  await replacement.getByRole("button",{name:"Upgrade document",exact:true}).click();
   const retained=await waitFor(()=>app.context().pages().find(p=>p.url().includes("/src/index.html")),"Retained SDK workspace after replacement");
   await expect(retained.getByLabel("Document",{exact:true})).toHaveValue(marker);
   assert.equal((await replacement.evaluate(()=>window.solutions.request("state"))).settings.autoUpdates,false);

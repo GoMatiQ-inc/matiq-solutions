@@ -291,10 +291,6 @@ function solutionsPrototype(root) {
         frame,
         navigation: view === "app" ? toolNavigation : null,
         view,
-        stylesheet: new URL(
-          "../../tool-frame.css",
-          new URL(entry, location.href),
-        ).href,
       });
     return frame;
   }

@@ -1,15 +1,11 @@
 // Prototype composition only: native renderer code and shared SDK styles stay unchanged.
-function mountPrototypeTool({ frame, navigation, view, stylesheet }) {
+function mountPrototypeTool({ frame, navigation, view }) {
   let observer;
   function attach() {
     observer?.disconnect();
     if (!frame.isConnected) return;
     const doc = frame.contentDocument;
     if (!doc?.body) return;
-    const link = doc.createElement("link");
-    link.rel = "stylesheet";
-    link.href = stylesheet;
-    doc.head.append(link);
     let selected = false;
     function sync() {
       if (!frame.isConnected) return;

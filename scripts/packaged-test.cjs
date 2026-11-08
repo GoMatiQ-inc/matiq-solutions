@@ -16,11 +16,12 @@ const { _electron:electron }=require("playwright"),lifecycle=require("@matiq-sol
   assert.equal(actual.version,process.env.SOLUTIONS_RELEASE_VERSION||require("../package.json").version);
   await page.getByText("No tools installed. Browse the marketplace to choose your first tool.",{exact:true}).waitFor();
   await page.getByRole("button",{name:"Browse marketplace",exact:true}).click();
-  await page.getByRole("heading",{name:"Find your next tool.",exact:true}).waitFor();
+  await page.getByRole("heading",{name:"Marketplace",exact:true,level:2}).waitFor();
   const state=await page.evaluate(()=>window.solutions.request("state"));
   assert.deepEqual(state.installed.tools,{});
   await assert.rejects(fs.access(path.join(profile,"tools")),{code:"ENOENT"});
-  await page.getByRole("button",{name:"Settings",exact:true}).click();
+  await page.getByRole("button",{name:"Open app launcher",exact:true}).click();
+  await page.getByRole("dialog",{name:"Installed apps"}).getByRole("button",{name:"Settings",exact:true}).click();
   await page.getByText("Suite version "+actual.version+" · "+process.platform+"-"+process.arch,{exact:true}).waitFor();
   await fs.writeFile(path.join(output,"packaged-proof.json"),JSON.stringify({schema:1,version:actual.version,arch:process.arch,packaged:true,checks:["isolated-profile","empty-library","marketplace-navigation","no-tools-auto-installed","settings-rendered"]},null,2)+"\n");
   console.log("PASS: packaged suite launches with its own profile, empty library, marketplace and settings.");

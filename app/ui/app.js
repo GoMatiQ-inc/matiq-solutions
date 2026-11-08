@@ -2,7 +2,9 @@ const api = window.solutions,
   $ = (s) => document.querySelector(s);
 let state = null,
   page = "library",
-  selected = null;
+  selected = null,
+  detail = null,
+  settingsApp = "general";
 function element(tag, text, cls) {
   const n = document.createElement(tag);
   if (text !== undefined) n.textContent = text;
@@ -21,7 +23,10 @@ async function run(fn) {
     await refresh();
   } catch (e) {
     $("#error").hidden = false;
-    $("#error").textContent = e.message.replace(/^Error invoking remote method '[^']+': Error: /, "");
+    $("#error").textContent = e.message.replace(
+      /^Error invoking remote method '[^']+': Error: /,
+      "",
+    );
   }
 }
 function confirmInstall(tool, update = false) {
@@ -72,34 +77,90 @@ async function install(tool, update = false) {
       reviewedCapabilities: tool.capabilities || [],
     });
 }
-function card(tool, installed) {
-  const c = element("article", undefined, "card");
+const shortName = (tool) =>
+  (tool.name || tool.manifest?.name || tool.id).replace(/^MatiQ\s+/, "");
+const allInstalled = () => Object.values(state.installed.tools);
+const available = () => {
+  const tools = new Map(state.catalog.tools.map((t) => [t.id, t]));
+  for (const t of allInstalled()) tools.set(t.id, { ...tools.get(t.id), ...t });
+  return [...tools.values()];
+};
+function tile(tool, cls) {
+  const b = button("", () => openTool(tool.id));
+  b.className = cls;
+  b.setAttribute("aria-label", shortName(tool));
+  const icon = element("span", undefined, "mq-app-icon");
+  icon.append(window.matiqIcon(tool.id.split(".").at(-1)));
+  b.append(
+    icon,
+    element(cls === "mq-home-app" ? "strong" : "span", shortName(tool)),
+  );
+  return b;
+}
+async function openTool(id, settings = false) {
+  $("#app-launcher").hidePopover();
+  if (settings) {
+    const previous = await api.request("open", { id });
+    const current = await api.request("state");
+    if (!current.navigation.settings) {
+      await api.request("hide");
+      page = "settings";
+      settingsApp = id;
+      return previous;
+    }
+  }
+  await api.request("open", { id, settings });
+  page = settings ? "settings" : "tool";
+  settingsApp = settings ? id : "general";
+  detail = null;
+}
+async function go(next) {
+  $("#app-launcher").hidePopover();
+  await api.request("hide");
+  selected = null;
+  page = next;
+  detail = null;
+  settingsApp = "general";
+}
+function management(tool) {
+  const installed = state.installed.tools[tool.id],
+    c = element("article", undefined, "card");
   c.append(
-    element("h3", tool.name || tool.manifest?.name || tool.id),
+    element("h3", shortName(tool)),
     element(
       "p",
       tool.description ||
         tool.manifest?.description ||
-        "Runs locally on your computer.",
+        "Runs locally on your device.",
     ),
     element("p", "Version " + tool.version, "caption"),
   );
   const row = element("div", undefined, "actions");
   if (installed) {
+    const open = button("Open", () => openTool(tool.id), true);
+    open.disabled = tool.enabled === false;
+    row.append(open);
+    if (state.running.some((t) => t.id === tool.id))
+      row.append(button("Close", () => api.request("close", { id: tool.id })));
     row.append(
-      button(
-        "Open",
-        async () => {
-          await api.request("open", { id: tool.id });
-          selected = tool.id;
-        },
-        true,
+      button(tool.enabled === false ? "Enable" : "Disable", () =>
+        api.request("enable", { id: tool.id, enabled: tool.enabled === false }),
       ),
     );
-    const running=state.running.some(item=>item.id===tool.id);
-    if(running)row.append(button("Close",()=>api.request("close",{id:tool.id})));
-    row.append(button(tool.enabled===false?"Enable":"Disable",()=>api.request("enable",{id:tool.id,enabled:tool.enabled===false})));
-    if(tool.previous)row.append(button("Roll back",async()=>{if(window.confirm("Return to the retained previous tool version and pause automatic downloads for all installed tools? Your projects will be kept. You can resume automatic downloads in Settings."))await api.request("rollback",{id:tool.id});}));
+    if (tool.previous)
+      row.append(
+        button("Roll back", async () => {
+          if (
+            window.confirm(
+              "Return to the retained previous tool version and pause automatic downloads for all installed tools? Your projects will be kept. You can resume automatic downloads in Settings.",
+            )
+          )
+            await api.request("rollback", { id: tool.id });
+        }),
+      );
+    const update = state.updates.find((t) => t.id === tool.id);
+    if (update)
+      row.append(button("Download update", () => install(update, true)));
     if (tool.pending)
       row.append(element("span", "Update downloaded · restart required"));
     row.append(
@@ -113,12 +174,12 @@ function card(tool, installed) {
       }),
     );
   } else {
-    const supported = tool.targets?.includes(state.target);
-    const b = button(
-      supported ? "Install" : "Not available on this device",
-      () => install(tool),
-      true,
-    );
+    const supported = tool.targets?.includes(state.target),
+      b = button(
+        supported ? "Install" : "Not available on this device",
+        () => install(tool),
+        true,
+      );
     b.disabled = !supported || state.installing;
     row.append(b);
   }
@@ -127,91 +188,201 @@ function card(tool, installed) {
 }
 function render() {
   if (!state) return;
-  $("#title").textContent = selected
-    ? state.installed.tools[selected]?.manifest.name || "Tool"
-    : {
-        library: "My tools",
-        marketplace: "Marketplace",
-        updates: "Downloads & updates",
-        settings: "Settings",
-      }[page];
-  $("#return").hidden = !selected;
-  $("#cancel-download").hidden=!state.canCancelDownload;
-  for (const b of document.querySelectorAll("[data-page]"))
-    b.classList.toggle("active", !selected && b.dataset.page === page);
+  const current = selected && state.installed.tools[selected],
+    isSettings = selected ? state.viewMode === "settings" : page === "settings";
+  if (selected) {
+    page = isSettings ? "settings" : "tool";
+    if (isSettings) settingsApp = selected;
+  }
+  $("#title").textContent = isSettings
+    ? "Settings"
+    : current
+      ? shortName(current)
+      : {
+          library: "My tools",
+          marketplace: "Marketplace",
+          updates: "Downloads & updates",
+        }[page] || "My tools";
+  const nav = $("#tool-navigation");
+  nav.replaceChildren();
+  nav.setAttribute(
+    "aria-label",
+    current ? shortName(current) + " navigation" : "Tool navigation",
+  );
+  if (current && !isSettings)
+    for (const item of state.navigation.items) {
+      const b = button(item.label === "New chat" ? "+" : item.label, () =>
+        api.request("navigation", { id: selected, index: item.index }),
+      );
+      b.setAttribute("aria-label", item.label);
+      if (item.active) b.setAttribute("aria-current", "page");
+      b.disabled = item.disabled;
+      nav.append(b);
+    }
+  const gear = $("#app-settings");
+  gear.hidden = !current || isSettings;
+  gear.setAttribute(
+    "aria-label",
+    current ? shortName(current) + " settings" : "App settings",
+  );
+  gear.title = gear.getAttribute("aria-label");
+  gear.onclick = () => run(() => openTool(selected, true));
+  const apps = $("#installed-apps");
+  apps.replaceChildren();
+  for (const t of allInstalled().filter((t) => t.enabled !== false))
+    apps.append(tile(t, "mq-app-tile"));
+  if (!apps.children.length)
+    apps.append(element("p", "Add or enable apps in Marketplace.", "caption"));
+  const tabs = $("#settings-tabs");
+  tabs.hidden = !isSettings;
+  tabs.replaceChildren();
+  if (isSettings) {
+    const general = button("Solutions", () => go("settings"));
+    if (settingsApp === "general") general.setAttribute("aria-current", "page");
+    tabs.append(general);
+    for (const t of allInstalled()) {
+      const b = button(shortName(t), () => openTool(t.id, true));
+      if (settingsApp === t.id) b.setAttribute("aria-current", "page");
+      b.disabled = t.enabled === false;
+      tabs.append(b);
+    }
+  }
   const root = $("#content");
   root.replaceChildren();
   root.hidden = Boolean(selected);
-  const open = $("#open-tools");
-  open.replaceChildren();
-  for (const tool of state.running)
-    open.append(
-      button(tool.name, async () => {
-        await api.request("open", { id: tool.id });
-        selected = tool.id;
-      }),
-    );
+  $("#cancel-download").hidden = !state.canCancelDownload;
   $("#activity").textContent = state.activity || "";
   if (selected) return;
   if (page === "library") {
-    root.append(
-      element("h2", "Your tools, on your device."),
-      element("p", "Install only what you want to use."),
+    const intro = element("div", undefined, "mq-home-intro");
+    intro.append(
+      element("h2", "Your apps"),
+      element("p", "Pick up where you left off."),
     );
-    const grid = element("div", undefined, "grid");
-    for (const t of Object.values(state.installed.tools))
-      grid.append(card(t, true));
-    if (!grid.children.length) {
+    root.append(intro);
+    const grid = element("div", undefined, "mq-home-apps");
+    for (const t of allInstalled().filter((t) => t.enabled !== false))
+      grid.append(tile(t, "mq-home-app"));
+    root.append(grid);
+    if (!grid.children.length)
       root.append(
         element(
           "p",
           "No tools installed. Browse the marketplace to choose your first tool.",
         ),
-        button(
-          "Browse marketplace",
-          () => {
-            page = "marketplace";
-          },
-          true,
-        ),
+        button("Browse marketplace", () => go("marketplace"), true),
       );
-    } else root.append(grid);
   }
   if (page === "marketplace") {
+    if (detail) {
+      const tool = available().find((t) => t.id === detail);
+      if (tool) {
+        root.append(
+          button("Back to marketplace", () => {
+            detail = null;
+          }),
+          element("h2", shortName(tool)),
+          management(tool),
+        );
+        return;
+      }
+      detail = null;
+    }
     root.append(
-      element("h2", "Find your next tool."),
-      element("p", "Browse without installing. Every tool runs locally."),
+      element("h2", "Marketplace"),
+      element(
+        "p",
+        "Browse available tools and manage the apps on your device.",
+      ),
     );
-    root.append(
-      button("Refresh marketplace", () => api.request("catalog.refresh")),
-    );
-    const search = element("input");
+    const controls = element("div", undefined, "mq-market-controls"),
+      search = element("input"),
+      filter = element("select");
     search.type = "search";
     search.placeholder = "Search available tools";
     search.setAttribute("aria-label", "Search available tools");
-    root.append(search);
-    const grid = element("div", undefined, "grid");
+    filter.setAttribute("aria-label", "Filter tools");
+    for (const [value, label] of [
+      ["all", "All tools"],
+      ["installed", "Installed"],
+      ["available", "Not installed"],
+    ]) {
+      const option = element("option", label);
+      option.value = value;
+      filter.append(option);
+    }
+    controls.append(
+      search,
+      filter,
+      button("Refresh marketplace", () => api.request("catalog.refresh")),
+      button("Downloads & updates", () => go("updates")),
+    );
+    root.append(controls);
+    const wrap = element("div", undefined, "mq-table-wrap"),
+      table = element("table"),
+      head = element("thead"),
+      row = element("tr"),
+      body = element("tbody");
+    table.setAttribute("aria-label", "Available tools");
+    for (const text of ["Tool", "Status", "Version"])
+      row.append(element("th", text));
+    head.append(row);
+    table.append(head, body);
+    wrap.append(table);
+    root.append(wrap, element("p", state.catalogStatus, "caption"));
     function results() {
-      grid.replaceChildren();
-      for (const t of state.catalog.tools.filter((t) =>
-        (t.name + " " + (t.description || ""))
-          .toLowerCase()
-          .includes(search.value.toLowerCase()),
+      body.replaceChildren();
+      for (const t of available().filter(
+        (t) =>
+          (
+            shortName(t) +
+            " " +
+            (t.description || t.manifest?.description || "")
+          )
+            .toLowerCase()
+            .includes(search.value.toLowerCase()) &&
+          (filter.value === "all" ||
+            Boolean(state.installed.tools[t.id]) ===
+              (filter.value === "installed")),
       )) {
-        const installed = state.installed.tools[t.id];
-        grid.append(card(installed || t, Boolean(installed)));
-      }
-      if (!grid.children.length)
-        grid.append(
-          element(
-            "p",
-            "No tools match. Refresh the marketplace when connected.",
-          ),
+        const tr = element("tr"),
+          name = element("td"),
+          link = button(shortName(t), () => {
+            detail = t.id;
+          });
+        link.className = "mq-tool-link";
+        name.append(
+          link,
+          element("p", t.description || t.manifest?.description || ""),
         );
+        tr.append(
+          name,
+          element(
+            "td",
+            state.installed.tools[t.id]
+              ? t.enabled === false
+                ? "Disabled"
+                : "Installed"
+              : "Available",
+          ),
+          element("td", t.version),
+        );
+        body.append(tr);
+      }
+      if (!body.children.length) {
+        const tr = element("tr"),
+          td = element(
+            "td",
+            "No tools match. Refresh the marketplace when connected.",
+          );
+        td.colSpan = 3;
+        tr.append(td);
+        body.append(tr);
+      }
     }
     search.oninput = results;
+    filter.onchange = results;
     results();
-    root.append(grid, element("p", state.catalogStatus, "caption"));
   }
   if (page === "updates") {
     root.append(
@@ -220,9 +391,11 @@ function render() {
       button("Restart to apply updates", () => api.request("restart")),
     );
     for (const t of state.updates) {
-      const c = card({ ...t, id: t.id }, false);
-      const row = c.querySelector(".actions");
-      row.replaceChildren(button("Download update", () => install(t, true)));
+      const c = element("article", undefined, "card");
+      c.append(
+        element("h3", shortName(t)),
+        button("Download update", () => install(t, true)),
+      );
       root.append(c);
     }
     if (!state.updates.length)
@@ -235,6 +408,10 @@ function render() {
     );
   }
   if (page === "settings") {
+    if (settingsApp !== "general") {
+      root.append(element("p", "This app has no additional settings."));
+      return;
+    }
     root.append(element("h2", "Local by default."));
     const label = element("label", undefined, "setting"),
       check = element("input");
@@ -254,12 +431,21 @@ function render() {
         "p",
         "Projects and models stay on this computer. Uninstalling tools preserves your work.",
       ),
+      button("Downloads & updates", () => go("updates")),
       element("p", "Suite version " + state.version + " · " + state.target),
-      element("p",state.appUpdate.message,"caption"),
+      element("p", state.appUpdate.message, "caption"),
       button("Check for app updates", () => api.request("app.update.check")),
-      ...(state.appUpdate.status==="available"?[button("Download app update",()=>api.request("app.update.download"))]:[]),
-      ...(state.appUpdate.status==="ready"?[button("Restart to update app",()=>api.request("app.update.install"))]:[]),
     );
+    if (state.appUpdate.status === "available")
+      root.append(
+        button("Download app update", () => api.request("app.update.download")),
+      );
+    if (state.appUpdate.status === "ready")
+      root.append(
+        button("Restart to update app", () =>
+          api.request("app.update.install"),
+        ),
+      );
   }
 }
 async function refresh() {
@@ -267,28 +453,26 @@ async function refresh() {
   selected = state.selected;
   render();
 }
-for (const b of document.querySelectorAll("[data-page]"))
-  b.onclick = () =>
-    run(async () => {
-      selected = null;
-      page = b.dataset.page;
-      await api.request("hide");
-    });
-$("#cancel-download").onclick=()=>run(()=>api.request("download.cancel"));
-$("#return").onclick = () =>
-  run(async () => {
-    selected = null;
-    await api.request("hide");
+$("#launcher").append(window.matiqIcon("launcher"));
+$("#app-settings").append(window.matiqIcon("settings"));
+$("#app-launcher").addEventListener("toggle", (e) => {
+  const open = e.newState === "open";
+  $("#launcher").setAttribute("aria-expanded", String(open));
+  api.request("overlay", { open }).catch((error) => {
+    $("#error").hidden = false;
+    $("#error").textContent = error.message;
   });
+});
+$(".mq-home").onclick = () => run(() => go("library"));
+for (const b of document.querySelectorAll("[data-page]"))
+  b.onclick = () => run(() => go(b.dataset.page));
+$("#cancel-download").onclick = () => run(() => api.request("download.cancel"));
 api.onEvent((e) => {
   if (e.type === "activity") $("#activity").textContent = e.message;
-  else
-    refresh().catch((error) => {
-      $("#error").hidden = false;
-      $("#error").textContent = error.message;
-    });
+  else refresh().catch(showError);
 });
-refresh().catch((e) => {
+function showError(error) {
   $("#error").hidden = false;
-  $("#error").textContent = e.message;
-});
+  $("#error").textContent = error.message;
+}
+refresh().catch(showError);

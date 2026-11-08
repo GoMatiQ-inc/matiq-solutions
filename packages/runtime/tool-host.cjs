@@ -4,7 +4,11 @@ const fs = require("node:fs/promises"),
 const { frameGuard } = require("./trusted-frame.cjs");
 class ToolHost {
   constructor({ window, store, dataRoot, emit, sharedModelRoot }) {
-    this.leaseRoot = path.join(app.getPath("appData"), "MatiQ Solutions", "tool-locks");
+    this.leaseRoot = path.join(
+      app.getPath("appData"),
+      "MatiQ Solutions",
+      "tool-locks",
+    );
     this.window = window;
     this.store = store;
     this.dataRoot = dataRoot;
@@ -15,19 +19,21 @@ class ToolHost {
     this.closing = new Map();
     this.disposing = false;
     this.selected = null;
+    this.viewMode = "workspace";
+    this.overlay = false;
     this.window.on("resize", () => this.layout());
   }
   layout() {
     const [width, height] = this.window.getContentSize();
-    const x = width < 850 ? 190 : 220;
+    const y = this.viewMode === "settings" ? 108 : 48;
     for (const [id, t] of this.running) {
-      t.view.setVisible(id === this.selected);
-      t.instance.onVisibility?.(id === this.selected);
+      t.view.setVisible(id === this.selected && !this.overlay);
+      t.instance.onVisibility?.(id === this.selected && !this.overlay);
       t.view.setBounds({
-        x,
-        y: 84,
-        width: Math.max(1, width - x),
-        height: Math.max(1, height - 120),
+        x: 0,
+        y,
+        width: Math.max(1, width),
+        height: Math.max(1, height - y - 36),
       });
     }
   }
@@ -35,8 +41,32 @@ class ToolHost {
     this.selected = null;
     this.layout();
   }
-  async open(id) {
-    if(this.disposing||this.closing.has(id))throw Error("Wait for tool shutdown to finish before opening it again.");
+  setOverlay(open) {
+    this.overlay = open;
+    this.layout();
+  }
+  async navigate(id, index) {
+    if (id !== this.selected || this.closing.has(id))
+      throw Error("Open the tool before navigating.");
+    const tool = this.running.get(id);
+    if (!tool || tool.activationFailed)
+      throw Error("Reopen the tool before navigating.");
+    await require("@matiq-solutions/shell/navigation.cjs").navigate(
+      tool.view.webContents,
+      index,
+    );
+    if (Number.isInteger(index)) tool.workspaceIndex = index;
+  }
+  async navigation() {
+    const tool = this.running.get(this.selected);
+    if (!tool || tool.activationFailed || this.closing.has(tool.id) || tool.isClosing?.()) return { items: [], settings: false };
+    return require("@matiq-solutions/shell/navigation.cjs").describe(
+      tool.view.webContents,
+    );
+  }
+  async open(id, { settings = false } = {}) {
+    if (this.disposing || this.closing.has(id))
+      throw Error("Wait for tool shutdown to finish before opening it again.");
     if (!this.running.has(id)) {
       let opening = this.opening.get(id);
       if (!opening) {
@@ -49,8 +79,23 @@ class ToolHost {
         if (this.opening.get(id) === opening) this.opening.delete(id);
       }
     }
-    if (this.running.get(id)?.activationFailed) throw Error("Tool startup cleanup is incomplete. Close the tool to retry cleanup before reopening.");
+    if (this.running.get(id)?.activationFailed)
+      throw Error(
+        "Tool startup cleanup is incomplete. Close the tool to retry cleanup before reopening.",
+      );
     this.selected = id;
+    this.viewMode = settings ? "settings" : "workspace";
+    const tool = this.running.get(id);
+    if (settings) await this.navigate(id, "settings");
+    else if (tool.pageMode === "settings") {
+      const navigation = await this.navigation();
+      if (navigation.items.length)
+        await this.navigate(
+          id,
+          tool.workspaceIndex ?? navigation.items[0].index,
+        );
+    }
+    tool.pageMode = this.viewMode;
     this.layout();
     return { id };
   }
@@ -144,7 +189,12 @@ class ToolHost {
         );
         return { requested: true };
       },
-      protectedRoots: [this.dataRoot, this.store.root, record.directory, this.leaseRoot],
+      protectedRoots: [
+        this.dataRoot,
+        this.store.root,
+        record.directory,
+        this.leaseRoot,
+      ],
       handle,
       emit: (channel, event) => {
         if (!contents.isDestroyed()) contents.send(channel, event);
@@ -163,7 +213,11 @@ class ToolHost {
     };
     let instance;
     try {
-      lease = await require("./tool-lease.cjs").acquireToolLease({root:this.leaseRoot,id,owner:app.getName()});
+      lease = await require("./tool-lease.cjs").acquireToolLease({
+        root: this.leaseRoot,
+        id,
+        owner: app.getName(),
+      });
       await fs.mkdir(dataDir, { recursive: true, mode: 0o700 });
       const adapter = require(path.join(record.directory, m.adapter));
       if (typeof adapter.activate !== "function")
@@ -175,7 +229,8 @@ class ToolHost {
         typeof instance.dispose !== "function"
       )
         throw Error("Tool must provide status() and dispose().");
-      await require("@matiq-solutions/shell").apply(contents,{suite:true});
+      await require("@matiq-solutions/shell").apply(contents, { suite: true });
+      await require("@matiq-solutions/shell/navigation.cjs").prepare(contents);
       this.running.set(id, {
         id,
         name: m.name,
@@ -183,38 +238,66 @@ class ToolHost {
         instance,
         cleanup,
         requests,
-        isClosing:()=>closing,
+        isClosing: () => closing,
         setClosing: (value) => {
           closing = value;
         },
       });
     } catch (error) {
-      try { await instance?.dispose?.(); }
-      catch (shutdownError) {
+      try {
+        await instance?.dispose?.();
+      } catch (shutdownError) {
         // Keep the instance and ownership: another host must not acquire its
         // native hooks while failed cleanup may still have live helpers.
-        closing=true;
-        this.running.set(id, { id, name:m.name, view, instance, cleanup, requests,
-          setClosing:value=>{closing=value;},isClosing:()=>closing, activationFailed:true,
-          failureReason:`Startup failed: ${error.message}. Close this tool to retry cleanup: ${shutdownError.message}` });
-        throw Error(`Tool startup failed (${error.message}) and cleanup needs retry (${shutdownError.message}). Close this tool to retry cleanup before reopening.`);
+        closing = true;
+        this.running.set(id, {
+          id,
+          name: m.name,
+          view,
+          instance,
+          cleanup,
+          requests,
+          setClosing: (value) => {
+            closing = value;
+          },
+          isClosing: () => closing,
+          activationFailed: true,
+          failureReason: `Startup failed: ${error.message}. Close this tool to retry cleanup: ${shutdownError.message}`,
+        });
+        throw Error(
+          `Tool startup failed (${error.message}) and cleanup needs retry (${shutdownError.message}). Close this tool to retry cleanup before reopening.`,
+        );
       }
       await cleanup();
       throw error;
     }
   }
   async status() {
-    const rows=[];
-    for(const tool of this.running.values()){
+    const rows = [];
+    for (const tool of this.running.values()) {
       let state;
-      const closing=()=>this.closing.has(tool.id)||tool.isClosing?.();
-      if(tool.activationFailed)state={busy:true,recovery:true,reason:tool.failureReason};
-      else if(closing())state={busy:true,closing:true,reason:'Finishing tool shutdown'};
+      const closing = () => this.closing.has(tool.id) || tool.isClosing?.();
+      if (tool.activationFailed)
+        state = { busy: true, recovery: true, reason: tool.failureReason };
+      else if (closing())
+        state = {
+          busy: true,
+          closing: true,
+          reason: "Finishing tool shutdown",
+        };
       else {
-        try{state=await tool.instance.status();}
-        catch(error){if(!closing())throw error;state={busy:true,closing:true,reason:'Finishing tool shutdown'};}
+        try {
+          state = await tool.instance.status();
+        } catch (error) {
+          if (!closing()) throw error;
+          state = {
+            busy: true,
+            closing: true,
+            reason: "Finishing tool shutdown",
+          };
+        }
       }
-      rows.push({id:tool.id,name:tool.name,...state});
+      rows.push({ id: tool.id, name: tool.name, ...state });
     }
     return rows;
   }
@@ -225,7 +308,7 @@ class ToolHost {
       );
     for (const t of this.running.values())
       if (!id || id === t.id) {
-        if(t.activationFailed)continue;
+        if (t.activationFailed) continue;
         let timer;
         try {
           await Promise.race([
@@ -250,30 +333,42 @@ class ToolHost {
       }
   }
   async freeze(tool) {
-    if(tool.activationFailed || tool.frozen!==undefined)return;
-    tool.frozen=await tool.view.webContents.executeJavaScript("(()=>{const previous=document.documentElement.inert;document.documentElement.inert=true;return previous;})()");
+    if (tool.activationFailed || tool.frozen !== undefined) return;
+    tool.frozen = await tool.view.webContents.executeJavaScript(
+      "(()=>{const previous=document.documentElement.inert;document.documentElement.inert=true;return previous;})()",
+    );
   }
   async unfreeze(tool) {
-    if(tool.frozen===undefined)return;
-    if(!tool.view.webContents.isDestroyed())await tool.view.webContents.executeJavaScript(`document.documentElement.inert=${Boolean(tool.frozen)}`);
+    if (tool.frozen === undefined) return;
+    if (!tool.view.webContents.isDestroyed())
+      await tool.view.webContents.executeJavaScript(
+        `document.documentElement.inert=${Boolean(tool.frozen)}`,
+      );
     delete tool.frozen;
   }
   async prepareClose(id) {
     await this.assertIdle(id);
-    const tool=this.running.get(id);
-    if(!tool)return;
+    const tool = this.running.get(id);
+    if (!tool) return;
     try {
       await this.freeze(tool);
       await this.assertIdle(id);
-      if(!tool.activationFailed && tool.requests.size)throw Error(`Wait for ${tool.name}'s current request to finish.`);
+      if (!tool.activationFailed && tool.requests.size)
+        throw Error(`Wait for ${tool.name}'s current request to finish.`);
       tool.setClosing(true);
       return tool;
-    } catch(error) { await this.unfreeze(tool);throw error; }
+    } catch (error) {
+      await this.unfreeze(tool);
+      throw error;
+    }
   }
   async close(id) {
-    if(this.disposing)throw Error("Wait for suite shutdown to finish.");
-    let operation=this.closing.get(id);
-    if(!operation){operation=this.closeOne(id).finally(()=>this.closing.delete(id));this.closing.set(id,operation);}
+    if (this.disposing) throw Error("Wait for suite shutdown to finish.");
+    let operation = this.closing.get(id);
+    if (!operation) {
+      operation = this.closeOne(id).finally(() => this.closing.delete(id));
+      this.closing.set(id, operation);
+    }
     return operation;
   }
   async closeOne(id) {
@@ -292,19 +387,23 @@ class ToolHost {
     }
   }
   async dispose() {
-    if(this.disposing||this.closing.size)throw Error("Wait for tool shutdown to finish before restarting or quitting.");
-    this.disposing=true;
+    if (this.disposing || this.closing.size)
+      throw Error(
+        "Wait for tool shutdown to finish before restarting or quitting.",
+      );
+    this.disposing = true;
     const prepared = [];
     try {
       // Check every tool before gating any IPC: a later busy recording must
       // not interrupt commands or dirty-state notifications in earlier tools.
       await this.assertIdle();
-      for(const tool of this.running.values())await this.freeze(tool);
+      for (const tool of this.running.values()) await this.freeze(tool);
       // Once every workspace acknowledges inert, no later DOM-only edit can
       // invalidate an earlier tool's final status snapshot.
       await this.assertIdle();
       for (const tool of this.running.values()) {
-        if (!tool.activationFailed && tool.requests.size) throw Error(`Wait for ${tool.name}'s current request to finish.`);
+        if (!tool.activationFailed && tool.requests.size)
+          throw Error(`Wait for ${tool.name}'s current request to finish.`);
       }
       for (const tool of this.running.values()) {
         tool.setClosing(true);
@@ -319,9 +418,14 @@ class ToolHost {
       this.layout();
       this.emit();
     } catch (error) {
-      for (const t of this.running.values()) { t.setClosing(Boolean(t.activationFailed));await this.unfreeze(t); }
+      for (const t of this.running.values()) {
+        t.setClosing(Boolean(t.activationFailed));
+        await this.unfreeze(t);
+      }
       throw error;
-    } finally { this.disposing=false; }
+    } finally {
+      this.disposing = false;
+    }
   }
 }
 module.exports = { ToolHost };
