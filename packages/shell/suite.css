@@ -1,0 +1,310 @@
+body {
+  font-size: 14px;
+}
+button {
+  padding: 6px 10px;
+}
+h2 {
+  font-size: 24px;
+  margin: 0 0 8px;
+}
+h3 {
+  font:
+    600 15px MatiQSans,
+    Arial,
+    sans-serif;
+  margin: 0 0 8px;
+}
+.mq-header {
+  height: 48px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  gap: 20px;
+}
+.mq-header h1 {
+  font:
+    600 15px MatiQSans,
+    Arial,
+    sans-serif;
+  margin: 0;
+  white-space: nowrap;
+}
+.mq-home {
+  border: 0;
+  background: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+.mq-home img {
+  width: 82px;
+  height: auto;
+  display: block;
+}
+#tool-navigation {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  overflow: auto;
+}
+#tool-navigation button {
+  border: 0;
+  background: none;
+  font-size: 13px;
+  white-space: nowrap;
+  padding: 7px 10px;
+}
+#tool-navigation button[aria-current="page"],
+.mq-settings-tabs button[aria-current="page"] {
+  background: #e9eef7;
+  color: var(--action);
+}
+.mq-launcher,
+.mq-app-settings {
+  border: 0;
+  background: none;
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  flex-shrink: 0;
+}
+.mq-launcher {
+  margin-left: auto;
+  color: var(--action);
+}
+.mq-launcher svg,
+.mq-app-settings svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.mq-launcher svg {
+  fill: currentColor;
+}
+.mq-appmenu {
+  position: fixed;
+  inset: 48px 18px auto auto;
+  margin: 0;
+  width: 260px;
+  max-width: calc(100vw - 24px);
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 8px 32px #1b1d2126;
+}
+.mq-appmenu::backdrop {
+  background: transparent;
+}
+.mq-appmenu h2 {
+  font:
+    600 14px MatiQSans,
+    Arial,
+    sans-serif;
+  margin: 0;
+  padding: 14px 16px 8px;
+}
+.mq-appmenu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0 10px 12px;
+}
+.mq-app-tile,
+.mq-home-app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  background: white;
+  padding: 8px 4px;
+  font-size: 13px;
+}
+.mq-app-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--action);
+}
+.mq-app-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.mq-appmenu-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-top: 1px solid var(--rule);
+  background: var(--band);
+}
+.mq-appmenu-footer button {
+  border: 0;
+  background: none;
+  color: var(--action);
+  padding: 0;
+  font-size: 13px;
+}
+main {
+  padding: 18px 22px;
+  max-width: none;
+}
+.mq-home-intro {
+  padding: 4px 0 8px;
+}
+.mq-home-intro p {
+  margin: 6px 0 0;
+}
+.mq-home-apps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 88px);
+  gap: 12px;
+  margin-top: 12px;
+}
+.mq-home-app {
+  min-height: 78px;
+}
+.mq-home-app strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.mq-market-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+}
+input[type="search"] {
+  padding: 7px 10px;
+  max-width: 420px;
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+select {
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: white;
+}
+.mq-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th {
+  text-align: left;
+  background: var(--band);
+  font-weight: 600;
+}
+td,
+th {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+tr:last-child td {
+  border-bottom: 0;
+}
+td p {
+  margin: 4px 0;
+  font-size: 13px;
+}
+.mq-tool-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--action);
+  font-weight: 600;
+}
+.mq-settings-tabs {
+  height: 60px;
+  padding: 12px 22px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.mq-settings-tabs button {
+  border: 0;
+  background: none;
+  font-size: 13px;
+  padding: 7px 12px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.card {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 18px;
+  margin-top: 16px;
+  max-width: 900px;
+}
+.card p {
+  margin: 8px 0;
+}
+.caption {
+  font-size: 12px;
+}
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--rule);
+  padding: 16px 0;
+}
+#statusbar {
+  position: fixed;
+  inset: auto 0 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px;
+  background: white;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+  z-index: 2;
+}
+#statusbar p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#error {
+  color: #942b25;
+}
+#activity {
+  flex: 1;
+}
+body {
+  padding-bottom: 36px;
+}
+dialog {
+  max-width: 600px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 22px;
+}
+dialog::backdrop {
+  background: #1b1d214d;
+}
+button.primary {
+  background: var(--action);
+  color: white;
+  border-color: var(--action);
+}

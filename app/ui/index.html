@@ -9,33 +9,55 @@
     />
     <title>MatiQ Solutions</title>
     <link rel="stylesheet" href="../../packages/shell/shell.css" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="../../packages/shell/suite.css" />
   </head>
   <body>
-    <aside class="suite-sidebar">
-      <img
-        src="../../packages/shell/assets/matiq-solutions-wordmark-dark.png"
-        alt="MatiQ Solutions"
-      />
-      <nav aria-label="Main navigation">
-        <button data-page="library">My tools</button
-        ><button data-page="marketplace">Marketplace</button
-        ><button data-page="updates">Downloads &amp; updates</button
-        ><button data-page="settings">Settings</button>
-      </nav>
-      <div id="open-tools" aria-label="Open tools"></div>
-      <p>On your device.<br />Your tools. Your choice.</p>
-    </aside>
-    <div class="suite-workspace">
-      <header>
-        <h1 id="title">My tools</h1>
-        <button id="cancel-download" hidden>Cancel download</button>
-        <button id="return" hidden>Back to my tools</button>
-      </header>
-      <main id="content"><p>Loading your installed tools…</p></main>
+    <header class="mq-header">
+      <button class="mq-home" aria-label="MatiQ Solutions home">
+        <img
+          src="../../packages/shell/assets/matiq-solutions-wordmark-dark.png"
+          alt="MatiQ Solutions"
+        />
+      </button>
+      <h1 id="title">My tools</h1>
+      <nav id="tool-navigation" aria-label="Tool navigation"></nav>
+      <button id="app-settings" class="mq-app-settings" hidden></button
+      ><button
+        id="launcher"
+        class="mq-launcher"
+        aria-label="Open app launcher"
+        aria-expanded="false"
+        popovertarget="app-launcher"
+        popovertargetaction="toggle"
+      ></button>
+    </header>
+    <div
+      id="app-launcher"
+      class="mq-appmenu"
+      popover="auto"
+      role="dialog"
+      aria-label="Installed apps"
+    >
+      <h2>Your apps</h2>
+      <div id="installed-apps" class="mq-appmenu-grid"></div>
+      <footer class="mq-appmenu-footer">
+        <button data-page="settings">Settings</button
+        ><button data-page="marketplace">Marketplace</button>
+      </footer>
+    </div>
+    <nav
+      id="settings-tabs"
+      class="mq-settings-tabs"
+      aria-label="Settings sections"
+      hidden
+    ></nav>
+    <main id="content"><p>Loading your installed tools…</p></main>
+    <footer id="statusbar">
       <p id="error" role="alert" hidden></p>
       <p id="activity" role="status"></p>
-    </div>
+      <button id="cancel-download" hidden>Cancel download</button>
+    </footer>
+    <script src="../../packages/shell/icons.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -43,6 +43,8 @@ const {
     );
     adapter=adapter.replace("dispose:async()=>{}","dispose:async()=>{if(globalThis.fixtureFailDispose){globalThis.fixtureFailDispose=false;throw Error('Fixture helper still stopping');}}");
     await fs.writeFile(adapterFile, adapter);
+    const htmlFile=path.join(source,'src/index.html');
+    await fs.writeFile(htmlFile,(await fs.readFile(htmlFile,'utf8')).replace('<h2>Settings</h2><p>This tool has no additional settings.</p>','<h2>Fixture preferences</h2><label>Display label<input aria-label="Display label"></label>'));
     const keys = crypto.generateKeyPairSync("ed25519");
     const publicKey = keys.publicKey.export({ type: "spki", format: "pem" });
     const packages = {},
@@ -108,6 +110,9 @@ const {
       for (const process of owned) await verifyStopped(process);
       owned = [];
     }
+    async function waitOverlay(value){for(let i=0;i<100;i++){if(await app.evaluate(()=>globalThis.fixtureSuite.host.overlay)===value)return;await new Promise(r=>setTimeout(r,20));}assert.fail('Launcher must synchronize native view visibility.');}
+    async function menuPage(name){await page.getByRole('button',{name:'Open app launcher',exact:true}).click();await page.getByRole('dialog',{name:'Installed apps'}).getByRole('button',{name,exact:true}).click();}
+    async function overview(name){await menuPage('Marketplace');await page.getByRole('button',{name,exact:true}).click();}
     let page = await launch();
     await page
       .getByText(
@@ -119,6 +124,7 @@ const {
     await page
       .getByRole("button", { name: "Browse marketplace", exact: true })
       .click();
+    await page.getByRole("button", { name: "Local document", exact: true }).click();
     await page.getByRole("button", { name: "Install", exact: true }).click();
     await page
       .getByRole("dialog")
@@ -162,6 +168,29 @@ const {
       await new Promise((r) => setTimeout(r, 50));
     }
     assert.ok(tool, "Installed tool workspace must be a live isolated page.");
+    await page.getByRole('navigation',{name:'Local document navigation'}).getByRole('button',{name:'Document',exact:true}).waitFor();
+    assert.equal(await tool.locator('.sidebar').isVisible(),false);
+    await page.getByRole('button',{name:'Open app launcher'}).click();
+    await page.getByRole('dialog',{name:'Installed apps'}).waitFor({state:'visible'});
+    await waitOverlay(true);
+    await page.getByRole('button',{name:'Open app launcher'}).click();
+    await page.getByRole('dialog',{name:'Installed apps'}).waitFor({state:'hidden'});
+    await waitOverlay(false);
+    await page.getByRole('button',{name:'Local document settings',exact:true}).click();
+    await page.getByRole('navigation',{name:'Settings sections'}).getByRole('button',{name:'Local document',exact:true}).waitFor();
+    await tool.getByRole('heading',{name:'Fixture preferences',exact:true}).waitFor();
+    await tool.getByLabel('Display label',{exact:true}).fill('Retain settings view');
+    assert.equal((await app.evaluate(()=>globalThis.fixtureSuite.host.running.get('com.matiq.fixture').view.getBounds())).y,108);
+    await menuPage('Settings');
+    await page.getByRole('button',{name:'Solutions',exact:true}).waitFor();
+    assert.equal((await page.evaluate(()=>window.solutions.request('state'))).selected,null);
+    await page.getByRole('navigation',{name:'Settings sections'}).getByRole('button',{name:'Local document',exact:true}).click();
+    await tool.getByRole('heading',{name:'Fixture preferences',exact:true}).waitFor();
+    assert.equal(await tool.getByLabel('Display label',{exact:true}).inputValue(),'Retain settings view');
+    await menuPage('Marketplace');await page.getByRole('button',{name:'Local document',exact:true}).click();await page.getByRole('button',{name:'Open',exact:true}).click();
+    await tool.getByLabel('Document',{exact:true}).waitFor({state:'visible'});
+    const viewBounds=await app.evaluate(()=>globalThis.fixtureSuite.host.running.get('com.matiq.fixture').view.getBounds());
+    assert.equal(viewBounds.x,0);assert.equal(viewBounds.y,48);
     await tool
       .getByLabel("Document", { exact: true })
       .fill("Saved through installed tool, outside the suite source.");
@@ -258,9 +287,8 @@ const {
     await close();
     config.catalog.tools = [entries[1]];
     page = await launch();
-    await page
-      .getByRole("button", { name: "Downloads & updates", exact: true })
-      .click();
+    await menuPage('Settings');
+    await page.getByRole('button',{name:'Downloads & updates',exact:true}).click();
     await page
       .getByRole("button", { name: "Download update", exact: true })
       .click();
@@ -304,6 +332,7 @@ const {
     await fs.rm(probe);await fs.rm(probe+".ready");await fs.rm(probe+".stop");
     console.log("PASS: actual Restart control relaunched the suite and activated the staged tool version.");
     page = await launch();
+    await overview("Local document");
     await page.getByText("Version 0.1.1", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Open", exact: true }).click();
     for (let i = 0; i < 100; i++) {
@@ -319,11 +348,9 @@ const {
       await tool.getByLabel("Document", { exact: true }).inputValue(),
       "Saved through installed tool, outside the suite source.",
     );
-    await page
-      .getByRole("button", { name: "Back to my tools", exact: true })
-      .click();
+    await page.getByRole('button',{name:'MatiQ Solutions home',exact:true}).click();
     await replaceCatalog([entries[1],secondEntries[0]]);
-    await page.getByRole("button",{name:"Marketplace",exact:true}).click();
+    await overview("Other document");
     await page.getByRole("button",{name:"Install",exact:true}).click();await page.getByRole("dialog").getByRole("button",{name:"Install",exact:true}).click();await page.getByText("Other document installed. Choose Open.",{exact:true}).waitFor();
     await replaceCatalog([entries[2],secondEntries[1]]);
     await app.evaluate(()=>{globalThis.fixtureDownloadURLs=[];globalThis.fixtureConfig.downloadDelayMs=30000;});
@@ -332,7 +359,7 @@ const {
     let delayedAutomatic;for(let attempt=0;attempt<100;attempt++){delayedAutomatic=await page.evaluate(()=>window.solutions.request("state"));if(delayedAutomatic.canCancelDownload)break;await new Promise(resolve=>setTimeout(resolve,20));}
     assert.equal(delayedAutomatic.canCancelDownload,true);
     assert.deepEqual(await app.evaluate(()=>globalThis.fixtureDownloadURLs),[entries[2].packages[process.platform+"-"+process.arch].url]);
-    await page.getByRole("button",{name:"My tools",exact:true}).click();
+    await overview("Local document");
     page.once("dialog", (d) => {assert.match(d.message(),/pause automatic downloads for all installed tools/);return d.accept();});
     await page.getByRole("button",{name:"Roll back",exact:true}).click();
     await page.locator("article.card").filter({has:page.getByRole("heading",{name:"Local document",exact:true})}).getByText("Version 0.1.0",{exact:true}).waitFor();
@@ -347,9 +374,13 @@ const {
     assert.equal(afterAutomatic.installed.tools[secondManifest.id].pending,undefined);
     assert.deepEqual(await app.evaluate(()=>globalThis.fixtureDownloadURLs),[entries[2].packages[process.platform+"-"+process.arch].url]);
     console.log("PASS: rollback cancels/drains the delayed automatic update, restores the previous tool, durably pauses downloads and never starts the next tool update.");
-    page.once("dialog",d=>d.accept());await page.locator("article.card").filter({has:page.getByRole("heading",{name:"Other document",exact:true})}).getByRole("button",{name:"Uninstall",exact:true}).click();await page.getByRole("heading",{name:"Other document",exact:true}).waitFor({state:"hidden"});
+    await overview('Other document');page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Uninstall',exact:true}).click();
+    for(let i=0;i<100;i++){if(!(await page.evaluate(()=>window.solutions.request('state'))).installed.tools['com.matiq.fixture-second'])break;await new Promise(r=>setTimeout(r,20));}
+    assert.equal((await page.evaluate(()=>window.solutions.request('state'))).installed.tools['com.matiq.fixture-second'],undefined);
+    await overview('Local document');
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Uninstall", exact: true }).click();
+    await page.getByRole('button',{name:'MatiQ Solutions home',exact:true}).click();
     await page
       .getByText(
         "No tools installed. Browse the marketplace to choose your first tool.",

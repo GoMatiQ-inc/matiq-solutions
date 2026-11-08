@@ -11,7 +11,8 @@ require("../app/main.cjs")
     ...config,
     download: async (url,{signal}) => {globalThis.fixtureDownloadURLs.push(url);if(config.downloadDelayMs)await require("node:timers/promises").setTimeout(config.downloadDelayMs,undefined,{signal});return fs.readFile(config.packages[url]);},
   })
-  .then(async ({store}) => {
+  .then(async (suite) => {
+    globalThis.fixtureSuite=suite;const {store}=suite;
     const path=require("node:path"),marker=path.join(config.profile,"restart-probe.json");
     let probe;
     try { probe=JSON.parse(await fs.readFile(marker,"utf8")); }

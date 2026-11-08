@@ -7,7 +7,7 @@ A tool owns one repository. Its adapter is used by both its standalone Electron 
 Install the SDK tarball from the matching `sdk-v<VERSION>` GitHub release, then run:
 
 ```sh
-matiq-tool create my-canvas --id com.matiq.canvas --name "MatiQ Canvas"
+matiq-tool create my-canvas --id com.matiq.canvas --name "Canvas"
 cd my-canvas
 npm install
 npm start
@@ -60,7 +60,7 @@ For company Mac releases, use `withMacKeychain` from `@matiq-solutions/sdk/mac-k
 Use the MatiQ Solutions desktop SDK, not the separate Go MatiQ platform feature SDK. A new tool starts as a repository-owned draft prototype. Reuse the exact shared standalone shell and hosted shell; use real renderer source with a simulated desktop bridge. Never duplicate maintained tool UI in the suite repository.
 
 ```sh
-matiq-tool create my-canvas --id com.matiq.canvas --name "MatiQ Canvas" --suite ../matiq-solutions
+matiq-tool create my-canvas --id com.matiq.canvas --name "Canvas" --suite ../matiq-solutions
 # Existing tool without a prototype:
 matiq-tool prototype init --suite ../matiq-solutions
 # Rebuild this tool and the suite preview after an edit:
@@ -76,6 +76,10 @@ Feedback is not permission to implement. Only record approval after the owner ex
 
 ### Prompt for a new tool build
 
-> Build this as a MatiQ Solutions desktop tool in its own repository using the current desktop SDK. Start with the prototype process. Reuse the exact shared standalone shell and Solutions shell. If a prototype is missing, create its repository-owned prototype and register/build it into the existing Solutions prototype. Keep one tool renderer implementation; simulate native operations through a prototype bridge. Save the prototype source and iteration instructions in Git. Show standalone and suite views for review and wait for my explicit instruction before applying the design or implementing production behavior. Feedback alone is not approval. Keep installation opt-in, run/data local, and installed-tool updates independent.
+Use [NEW_TOOL_PROMPT.md](NEW_TOOL_PROMPT.md), replacing the tool name, purpose and required workflows. It requires fast vertical slices, focused regressions before packaging, and full final qualification without repeating unrelated checks during debugging.
+
+### Compact suite navigation (SDK 0.1.6)
+
+The suite owns the compact top bar, installed-app launcher and unified Solutions Settings tabs. Tool names in that bar omit the MatiQ prefix. Keep native page buttons inside `.sidebar nav`; the suite connects those existing controls to its top bar. Mark non-sidebar controls with `data-matiq-nav`. Mark the tool’s settings control `data-matiq-settings` (existing `data-page="settings"`, `#settings-nav` and Settings-labelled sidebar buttons remain compatible). Page buttons should reflect selection with `.active` or `aria-current="page"`. Do not create a second tool UI or replace its narrow IPC API. The shell’s `navigation.cjs` validates navigation indices and invokes only existing controls. Hosted gear navigation opens the real settings page inside the tool’s Solutions Settings section. Tools without settings receive an explicit empty state. Standalone shell behavior stays available for independent use.
 
 SDK 0.1.5 also adds the generated-output and local-registration ignore rules automatically for new and initialized tools, and protects the suite’s local checkout map. Existing approved source and prototype bridges are not overwritten. Use the same explicit shared-shell path when building/checking an existing tool against a different installed shell version. CI packaging must restore the matching registered suite checkout before checking an existing approval; never synthesize an owner approval in CI.

@@ -49,11 +49,13 @@ async function launch(options = {}) {
     if (e.code !== "ENOENT")
       throw Error("Suite settings are damaged. Restore your settings backup.");
   }
-  let settingsTail=Promise.resolve();
-  function saveSettings(){
-    const operation=settingsTail.then(()=>atomicJSON(settingsFile,{...settings}));
+  let settingsTail = Promise.resolve();
+  function saveSettings() {
+    const operation = settingsTail.then(() =>
+      atomicJSON(settingsFile, { ...settings }),
+    );
     // The caller receives errors; the tail lets a later explicit retry proceed.
-    settingsTail=operation.catch(()=>{});
+    settingsTail = operation.catch(() => {});
     return operation;
   }
   let catalog = options.catalog || require("../catalog/catalog.json"),
@@ -115,9 +117,19 @@ async function launch(options = {}) {
     sharedModelRoot: options.sharedModelRoot,
     emit: (event) => send(event),
   });
-  const prepareExit=()=>require("./lifecycle.cjs").prepareShutdown({busy:()=>Boolean(downloadController||store.busy||rollbackInProgress),settings:()=>settingsTail,dispose:()=>host.dispose()});
+  const prepareExit = () =>
+    require("./lifecycle.cjs").prepareShutdown({
+      busy: () =>
+        Boolean(downloadController || store.busy || rollbackInProgress),
+      settings: () => settingsTail,
+      dispose: () => host.dispose(),
+    });
   const uiURL = pathToFileURL(path.join(__dirname, "ui/index.html")).href;
-  const requireFrame = require("@matiq-solutions/runtime/trusted-frame.cjs").frameGuard(window.webContents,path.join(__dirname,"ui/index.html"));
+  const requireFrame =
+    require("@matiq-solutions/runtime/trusted-frame.cjs").frameGuard(
+      window.webContents,
+      path.join(__dirname, "ui/index.html"),
+    );
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (e) => e.preventDefault());
   session.defaultSession.setPermissionRequestHandler((_wc, _p, cb) =>
@@ -127,23 +139,62 @@ async function launch(options = {}) {
     activity = message;
     send({ type: "activity", message });
   }
-  let appUpdate = { status: "idle", message: "Check for a newer signed suite release." }, updater;
+  let appUpdate = {
+      status: "idle",
+      message: "Check for a newer signed suite release.",
+    },
+    updater;
   function appUpdater() {
-    if (!app.isPackaged) throw Error("App updates are available in the installed signed release.");
+    if (!app.isPackaged)
+      throw Error("App updates are available in the installed signed release.");
     if (updater) return updater;
     updater = require("electron-updater").autoUpdater;
     updater.autoDownload = false;
     updater.autoInstallOnAppQuit = false;
-    updater.on("checking-for-update",()=>{appUpdate={status:"checking",message:"Checking suite releases…"};send();});
-    updater.on("update-available",info=>{appUpdate={status:"available",version:info.version,message:`Suite ${info.version} is available to download.`};send();});
-    updater.on("update-not-available",()=>{appUpdate={status:"current",message:"Your suite is up to date."};send();});
-    updater.on("download-progress",progress=>{appUpdate={...appUpdate,status:"downloading",message:`Downloading suite update · ${Math.round(progress.percent)}%`};send();});
-    updater.on("update-downloaded",info=>{appUpdate={status:"ready",version:info.version,message:`Suite ${info.version} is downloaded. Restart when your work is finished.`};send();});
-    updater.on("error",error=>{quitting=false;appUpdate={status:"error",message:error.message};announce("Suite update: "+error.message);});
+    updater.on("checking-for-update", () => {
+      appUpdate = { status: "checking", message: "Checking suite releases…" };
+      send();
+    });
+    updater.on("update-available", (info) => {
+      appUpdate = {
+        status: "available",
+        version: info.version,
+        message: `Suite ${info.version} is available to download.`,
+      };
+      send();
+    });
+    updater.on("update-not-available", () => {
+      appUpdate = { status: "current", message: "Your suite is up to date." };
+      send();
+    });
+    updater.on("download-progress", (progress) => {
+      appUpdate = {
+        ...appUpdate,
+        status: "downloading",
+        message: `Downloading suite update · ${Math.round(progress.percent)}%`,
+      };
+      send();
+    });
+    updater.on("update-downloaded", (info) => {
+      appUpdate = {
+        status: "ready",
+        version: info.version,
+        message: `Suite ${info.version} is downloaded. Restart when your work is finished.`,
+      };
+      send();
+    });
+    updater.on("error", (error) => {
+      quitting = false;
+      appUpdate = { status: "error", message: error.message };
+      announce("Suite update: " + error.message);
+    });
     return updater;
   }
-  function refreshCatalog(){
-    if(!catalogRefresh)catalogRefresh=loadCatalog().finally(()=>{catalogRefresh=null;});
+  function refreshCatalog() {
+    if (!catalogRefresh)
+      catalogRefresh = loadCatalog().finally(() => {
+        catalogRefresh = null;
+      });
     return catalogRefresh;
   }
   async function loadCatalog() {
@@ -177,15 +228,19 @@ async function launch(options = {}) {
     send();
     return catalog;
   }
-  async function install({
-    id,
-    update = false,
-    approveCapabilities = false,
-    reviewedVersion,
-    reviewedCapabilities,
-  }, {automatic=false}={}) {
-    if(automatic&&(!settings.autoUpdates||rollbackInProgress))return {cancelled:true};
-    if(rollbackInProgress)throw Error("Wait for tool rollback to finish.");
+  async function install(
+    {
+      id,
+      update = false,
+      approveCapabilities = false,
+      reviewedVersion,
+      reviewedCapabilities,
+    },
+    { automatic = false } = {},
+  ) {
+    if (automatic && (!settings.autoUpdates || rollbackInProgress))
+      return { cancelled: true };
+    if (rollbackInProgress) throw Error("Wait for tool rollback to finish.");
     if (downloadController)
       throw Error("Wait for the current tool download or cancel it.");
     const installed = await store.state();
@@ -200,14 +255,18 @@ async function launch(options = {}) {
       throw Error("Review the tool requirements before installing.");
     const release = tool.packages[store.target];
     if (!release) throw Error("This tool is not available for your device.");
-    if(automatic&&(!settings.autoUpdates||rollbackInProgress))return {cancelled:true};
-    if(rollbackInProgress)throw Error("Wait for tool rollback to finish.");
-    if(downloadController)throw Error("Wait for the current tool download or cancel it.");
+    if (automatic && (!settings.autoUpdates || rollbackInProgress))
+      return { cancelled: true };
+    if (rollbackInProgress) throw Error("Wait for tool rollback to finish.");
+    if (downloadController)
+      throw Error("Wait for the current tool download or cancel it.");
     downloadController = new AbortController();
-    downloadAutomatic=automatic;
+    downloadAutomatic = automatic;
     let resolveDownloadFinished;
-    downloadFinished=new Promise(resolve=>{resolveDownloadFinished=resolve;});
-    downloadPhase="downloading";
+    downloadFinished = new Promise((resolve) => {
+      resolveDownloadFinished = resolve;
+    });
+    downloadPhase = "downloading";
     send();
     announce(`Downloading ${tool.name}…`);
     try {
@@ -217,7 +276,8 @@ async function launch(options = {}) {
         progress: (p) =>
           announce(`Downloading ${tool.name} · ${Math.round(p * 100)}%`),
       });
-      downloadPhase="verifying";send();
+      downloadPhase = "verifying";
+      send();
       await store.install(bytes, {
         update,
         approveCapabilities,
@@ -230,24 +290,43 @@ async function launch(options = {}) {
           ? `${tool.name} update downloaded. Restart when ready.`
           : `${tool.name} installed. Choose Open.`,
       );
-    } catch(error) {
-      if(downloadController.signal.aborted){announce("Download cancelled. Choose Install or Download update to try again.");return {cancelled:true};}
+    } catch (error) {
+      if (downloadController.signal.aborted) {
+        announce(
+          "Download cancelled. Choose Install or Download update to try again.",
+        );
+        return { cancelled: true };
+      }
       throw error;
     } finally {
-      downloadController = null;downloadPhase=null;downloadAutomatic=false;downloadFinished=null;resolveDownloadFinished();
+      downloadController = null;
+      downloadPhase = null;
+      downloadAutomatic = false;
+      downloadFinished = null;
+      resolveDownloadFinished();
       send();
     }
   }
   async function checkUpdates() {
     if (!options.catalog) await refreshCatalog();
-    const installed=await store.state();
+    const installed = await store.state();
     const available = updatesFor(installed, catalog, store.target);
     if (settings.autoUpdates)
       for (const t of available) {
-        if(!settings.autoUpdates||rollbackInProgress)break;
+        if (!settings.autoUpdates || rollbackInProgress) break;
         try {
-          if((t.capabilities||[]).some(capability=>!installed.tools[t.id].manifest.capabilities.includes(capability)))throw Error("Review the new permissions in Downloads & updates before downloading this update.");
-          await install({ id: t.id, update: true },{automatic:true});
+          if (
+            (t.capabilities || []).some(
+              (capability) =>
+                !installed.tools[t.id].manifest.capabilities.includes(
+                  capability,
+                ),
+            )
+          )
+            throw Error(
+              "Review the new permissions in Downloads & updates before downloading this update.",
+            );
+          await install({ id: t.id, update: true }, { automatic: true });
         } catch (e) {
           announce(`${t.name}: ${e.message}`);
         }
@@ -258,7 +337,10 @@ async function launch(options = {}) {
     await requireFrame(event);
     if (typeof name !== "string" || JSON.stringify(args).length > 10000)
       throw Error("Invalid suite request.");
-    if(rollbackInProgress&&!['state','hide'].includes(name))throw Error("Wait for tool rollback to finish before starting another operation.");
+    if (rollbackInProgress && !["state", "hide"].includes(name))
+      throw Error(
+        "Wait for tool rollback to finish before starting another operation.",
+      );
     switch (name) {
       case "state": {
         const installed = await store.state();
@@ -269,11 +351,14 @@ async function launch(options = {}) {
           catalog,
           catalogStatus,
           settings,
-          installing: Boolean(downloadController) || store.busy || rollbackInProgress,
-          canCancelDownload:downloadPhase==="downloading",
+          installing:
+            Boolean(downloadController) || store.busy || rollbackInProgress,
+          canCancelDownload: downloadPhase === "downloading",
           activity,
           running: await host.status(),
           selected: host.selected,
+          viewMode: host.viewMode,
+          navigation: await host.navigation(),
           appUpdate,
           updates: updatesFor(installed, catalog, store.target),
         };
@@ -283,31 +368,59 @@ async function launch(options = {}) {
       case "install":
         return install(args);
       case "download.cancel":
-        if(!downloadController||downloadPhase!=="downloading")throw Error("The download has finished. Wait for package verification to complete.");
+        if (!downloadController || downloadPhase !== "downloading")
+          throw Error(
+            "The download has finished. Wait for package verification to complete.",
+          );
         downloadController.abort();
-        return {requested:true};
+        return { requested: true };
       case "open": {
         announce("Opening installed tool…");
-        try{const result=await host.open(args.id);announce("Tool ready.");return result;}
-        catch(error){announce(error.message);throw error;}
+        try {
+          const result = await host.open(args.id, {
+            settings: args.settings === true,
+          });
+          announce("Tool ready.");
+          return result;
+        } catch (error) {
+          announce(error.message);
+          throw error;
+        }
       }
+      case "navigation":
+        await host.navigate(args.id, args.index);
+        return true;
+      case "overlay":
+        if (typeof args.open !== "boolean")
+          throw Error("Choose whether the launcher is open.");
+        host.setOverlay(args.open);
+        return true;
       case "close":
         await host.close(args.id);
         return true;
       case "rollback": {
-        if((downloadController||store.busy)&&!downloadAutomatic)throw Error("Finish or cancel your manual tool download before rolling back.");
-        rollbackInProgress=true;
-        try{
+        if ((downloadController || store.busy) && !downloadAutomatic)
+          throw Error(
+            "Finish or cancel your manual tool download before rolling back.",
+          );
+        rollbackInProgress = true;
+        try {
           await host.close(args.id);
-          settings.autoUpdates=false;
-          const pending=downloadFinished;
-          if(downloadAutomatic&&downloadPhase==='downloading')downloadController.abort();
+          settings.autoUpdates = false;
+          const pending = downloadFinished;
+          if (downloadAutomatic && downloadPhase === "downloading")
+            downloadController.abort();
           await saveSettings();
-          if(pending)await pending;
+          if (pending) await pending;
           await store.rollback(args.id);
-          announce("Previous tool version restored. Automatic tool downloads are paused; review updates before enabling them in Settings.");
+          announce(
+            "Previous tool version restored. Automatic tool downloads are paused; review updates before enabling them in Settings.",
+          );
           return true;
-        }finally{rollbackInProgress=false;send();}
+        } finally {
+          rollbackInProgress = false;
+          send();
+        }
       }
       case "hide":
         host.hide();
@@ -335,22 +448,33 @@ async function launch(options = {}) {
         app.quit();
         return { requested: true };
       case "app.update.check":
-        if (["checking","downloading","ready"].includes(appUpdate.status)) throw Error("Finish the current suite update before checking again.");
+        if (["checking", "downloading", "ready"].includes(appUpdate.status))
+          throw Error("Finish the current suite update before checking again.");
         await appUpdater().checkForUpdates();
         return true;
       case "app.update.download":
-        if (appUpdate.status !== "available") throw Error("Check for an available suite update first.");
-        appUpdate={...appUpdate,status:"downloading",message:"Starting suite update download…"};
+        if (appUpdate.status !== "available")
+          throw Error("Check for an available suite update first.");
+        appUpdate = {
+          ...appUpdate,
+          status: "downloading",
+          message: "Starting suite update download…",
+        };
         send();
         await appUpdater().downloadUpdate();
         return true;
       case "app.update.install":
-        if (appUpdate.status !== "ready") throw Error("Download the suite update before restarting.");
+        if (appUpdate.status !== "ready")
+          throw Error("Download the suite update before restarting.");
         await prepareExit();
-        quitting=true;
-        try { appUpdater().quitAndInstall(false,true); }
-        catch(error) { quitting=false;throw error; }
-        return {requested:true};
+        quitting = true;
+        try {
+          appUpdater().quitAndInstall(false, true);
+        } catch (error) {
+          quitting = false;
+          throw error;
+        }
+        return { requested: true };
       default:
         throw Error("Unknown suite operation.");
     }
@@ -388,9 +512,12 @@ async function launch(options = {}) {
     });
   });
   await window.loadURL(uiURL);
-  let timer,initialCheck;
+  let timer, initialCheck;
   if (!options.catalog) {
-    initialCheck=setTimeout(()=>checkUpdates().catch(error=>announce(error.message)),1000);
+    initialCheck = setTimeout(
+      () => checkUpdates().catch((error) => announce(error.message)),
+      1000,
+    );
     initialCheck.unref();
     timer = setInterval(
       () => checkUpdates().catch((e) => announce(e.message)),
