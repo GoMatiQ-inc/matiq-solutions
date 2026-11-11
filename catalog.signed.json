@@ -1,8 +1,8 @@
 {
   "signed": {
     "schema": 1,
-    "sequence": 1794400067013,
-    "expires": "2026-11-18T12:27:47.013Z",
+    "sequence": 1794403639149,
+    "expires": "2026-11-18T13:27:19.149Z",
     "tools": [
       {
         "schema": 1,
@@ -72,7 +72,7 @@
         "id": "com.matiq.guides",
         "name": "MatiQ Copycat",
         "description": "Capture, edit and export illustrated workflow guides locally.",
-        "version": "0.1.20",
+        "version": "0.1.23",
         "capabilities": [
           "files",
           "computer"
@@ -85,9 +85,9 @@
         ],
         "packages": {
           "darwin-arm64": {
-            "url": "https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.20/MatiQ-Copycat-0.1.20-darwin-arm64.mqt",
-            "bytes": 2544011,
-            "sha256": "9b31da15b2683b2e0265872183b7a9b677a89c627376e2c6cd2fbe15f3b6f788"
+            "url": "https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.23/MatiQ-Copycat-0.1.23-darwin-arm64.mqt",
+            "bytes": 2554445,
+            "sha256": "f632783541f732f4e5ae39e6da8a50041eac7225ebf557d968ced07694a0451f"
           }
         },
         "source": "https://github.com/GoMatiQ-inc/matiq-copycat",
@@ -96,5 +96,5 @@
     ]
   },
   "publisher": "matiq-solutions-release-v1",
-  "signature": "iENMVYbVzwqi/i9QQAf6BLX+RfBZAXJMSlEtEMhJEX7JVWTsxht9uXAzzehEOcVPfWzCyddW+EWHdLdqWLOvAg=="
+  "signature": "kxdLj1EzbIV5YytOLRIfsWJhrAiAemDC5JTo80PuBm305+5hAPWP2CCxI4U37mzLAnzFyu7kapPStDvHHWZEAA=="
 }
