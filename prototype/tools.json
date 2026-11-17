@@ -9,7 +9,7 @@
     },
     {
       "id": "com.matiq.schema",
-      "name": "Schema",
+      "name": "DBSchema",
       "repository": "https://github.com/GoMatiQ-inc/matiq-schema",
       "manifest": "prototype/manifest.json"
     },

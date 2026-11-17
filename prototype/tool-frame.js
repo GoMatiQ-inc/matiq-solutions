@@ -11,7 +11,7 @@ function mountPrototypeTool({ frame, navigation, view }) {
       if (!frame.isConnected) return;
       const sidebar = doc.querySelector(".sidebar");
       if (!sidebar) return;
-      const controls = [...sidebar.querySelectorAll("nav button")].filter(
+      const controls = [...doc.querySelectorAll(".sidebar nav button, [data-matiq-nav]")].filter(
         (button) => !button.classList.contains("chat-history"),
       );
       const settings = [...sidebar.querySelectorAll("button")].find(
@@ -63,6 +63,12 @@ function mountPrototypeTool({ frame, navigation, view }) {
         childList: true,
         attributes: true,
         attributeFilter: ["class", "disabled"],
+      });
+    }
+    for (const command of doc.querySelectorAll("[data-matiq-nav]")) {
+      if (!sidebar?.contains(command)) observer?.observe(command, {
+        attributes: true,
+        attributeFilter: ["class", "disabled", "hidden"],
       });
     }
   }
