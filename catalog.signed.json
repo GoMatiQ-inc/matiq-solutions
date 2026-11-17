@@ -1,8 +1,8 @@
 {
   "signed": {
     "schema": 1,
-    "sequence": 1794876094673,
-    "expires": "2026-11-24T00:41:34.673Z",
+    "sequence": 1794897098902,
+    "expires": "2026-11-24T06:31:38.902Z",
     "tools": [
       {
         "schema": 1,
@@ -96,5 +96,5 @@
     ]
   },
   "publisher": "matiq-solutions-release-v1",
-  "signature": "/tbYr5migdT/9RI0QQr7y2+8ZAJx7+3vBbqFZCOzhf9hPecBOyQIWLEgMDpJ4uRJr7r2UjyHKK5BZTS7X1bsAw=="
+  "signature": "KkMLJ5GSJvQ0uTitA1ULe1GubC0pe1UAoem4GxyNuCpUPkwOzhAYWt3SZ+TqC8UCU0aaQNingXvLtQk99Q+XBQ=="
 }
