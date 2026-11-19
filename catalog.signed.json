@@ -1,8 +1,8 @@
 {
   "signed": {
     "schema": 1,
-    "sequence": 1795049953612,
-    "expires": "2026-11-26T00:59:13.612Z",
+    "sequence": 1795050048982,
+    "expires": "2026-11-26T01:00:48.982Z",
     "tools": [
       {
         "schema": 1,
@@ -92,9 +92,34 @@
         },
         "source": "https://github.com/GoMatiQ-inc/matiq-copycat",
         "license": "MatiQ source-available — no paid redistribution"
+      },
+      {
+        "schema": 1,
+        "id": "com.matiq.schema",
+        "name": "DBSchema",
+        "description": "Design database schemas locally. Edit DBML and explore tables and relationships.",
+        "version": "0.1.0",
+        "capabilities": [
+          "files"
+        ],
+        "sdk": 1,
+        "dataVersion": 1,
+        "runtime": "electron-45.2.3",
+        "targets": [
+          "darwin-arm64"
+        ],
+        "packages": {
+          "darwin-arm64": {
+            "url": "https://github.com/GoMatiQ-inc/matiq-schema/releases/download/v0.1.0/DBSchema-0.1.0-darwin-arm64.mqt",
+            "bytes": 4713733,
+            "sha256": "313b7e572541b8880be3ed62f119d2c70275605a611dec00f7aa18aac29fbf4c"
+          }
+        },
+        "source": "https://github.com/GoMatiQ-inc/matiq-schema",
+        "license": "MatiQ source-available — no paid redistribution"
       }
     ]
   },
   "publisher": "matiq-solutions-release-v1",
-  "signature": "s+W1rq57O7N16XxMwlfwELm331so5CGhM1isSKGTch4TMzHUrfLzDz4wWj9rscHZXB7IdaIr46TemOhbcK6HCQ=="
+  "signature": "+iwSm2geX0ut6cioz5K9J/7F13+VMl2xTeUnJBfJcN1Aal89oK9E+pD5QZ5yuwAZYVvoJsPua4/vD3sQrPLqAA=="
 }
