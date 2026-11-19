@@ -76,7 +76,7 @@ Feedback is not permission to implement. Only record approval after the owner ex
 
 ### Prompt for a new tool build
 
-Use [NEW_TOOL_PROMPT.md](NEW_TOOL_PROMPT.md), replacing the tool name, purpose and required workflows. It requires fast vertical slices, focused regressions before packaging, and full final qualification without repeating unrelated checks during debugging.
+Paste [NEW_TOOL_PROMPT.md](NEW_TOOL_PROMPT.md), then append the tool brief without editing placeholders. New tool repositories are public from the beginning unless the owner explicitly requests otherwise, with the existing MatiQ No-Sale License, required attribution and package license metadata included in the first commit. Do not defer visibility or licensing until delivery. It requires fast vertical slices, focused regressions before packaging, and full final qualification without repeating unrelated checks during debugging.
 
 ### Compact suite navigation (SDK 0.1.6)
 
