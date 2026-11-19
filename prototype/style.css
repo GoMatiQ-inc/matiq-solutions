@@ -1208,3 +1208,6 @@ body.mq-prototype {
     height: calc(100dvh - 108px);
   }
 }
+
+body.mq-prototype{margin:0}
+body.mq-prototype .mq-installed-tool{box-sizing:border-box}

@@ -8,6 +8,12 @@
       "manifest": "prototype/manifest.json"
     },
     {
+      "id": "com.matiq.schema",
+      "name": "DBSchema",
+      "repository": "https://github.com/GoMatiQ-inc/matiq-schema",
+      "manifest": "prototype/manifest.json"
+    },
+    {
       "id": "com.matiq.voice",
       "name": "MatiQ Voice",
       "repository": "https://github.com/GoMatiQ-inc/matiq-voice",

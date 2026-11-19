@@ -280,7 +280,7 @@ function solutionsPrototype(root) {
     frame.src = entry + "?mode=" + mode;
     frame.setAttribute(
       "sandbox",
-      "allow-scripts allow-same-origin allow-modals allow-forms",
+      "allow-scripts allow-same-origin allow-modals allow-forms allow-downloads",
     );
     frame.setAttribute(
       "allow",
