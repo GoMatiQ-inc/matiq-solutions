@@ -28,7 +28,7 @@ async function hash(file){const digest=createHash("sha256");for await(const chun
   await fs.mkdir(apps);run("/usr/bin/ditto",["-x","-k",path.join(root,"dist",`MatiQ-Solutions-${baseVersion}-mac-${process.arch}.zip`),apps]);
   // Install a real SDK-generated tool through the verified store, not a fabricated registry row.
   const source=path.join(temporary,"independent-tool-repository"),manifest=await create(source,{id:"com.matiq.upgrade-fixture",name:"Upgrade document"});
-  await fs.mkdir(path.join(source,"node_modules/@matiq-solutions"),{recursive:true});await fs.cp(path.join(root,"packages/shell"),path.join(source,"node_modules/@matiq-solutions/shell"),{recursive:true});
+  await fs.mkdir(path.join(source,"node_modules/@matiq-solutions"),{recursive:true});for(const name of ["shell","runtime"])await fs.cp(path.join(root,"packages",name),path.join(source,"node_modules/@matiq-solutions",name),{recursive:true,filter:entry=>path.basename(entry)!=="node_modules"});
   const archive=path.join(temporary,"document.mqt");await sdk.pack({root:source,manifest,publisher:"matiq-solutions-release-v1",privateKey,include:["src","node_modules","LICENSE"],output:archive});
   const store=new ToolStore({root:path.join(profile,"tool-store"),publishers});await store.install(await fs.readFile(archive),{expectedId:manifest.id,expectedVersion:manifest.version,expectedCapabilities:[]});
   const targetDirectory=path.join(root,"upgrade-target"),zip=`MatiQ-Solutions-${targetVersion}-mac-${process.arch}.zip`,allowed=new Set(["latest-mac.yml",zip,zip+".blockmap"]);
@@ -38,7 +38,11 @@ async function hash(file){const digest=createHash("sha256");for await(const chun
   app=await electron.launch({executablePath:executable,args:[],env});owned=lifecycle.capture(app.process());for(const stream of [app.process().stdout,app.process().stderr])stream?.on("data",chunk=>{runtimeLog=(runtimeLog+chunk).slice(-20000);});
   assert.equal(await fs.realpath(await app.evaluate(({app})=>app.getPath("userData"))),await fs.realpath(profile));
   const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.getByRole("button",{name:"Upgrade document",exact:true}).click();
-  const tool=await waitFor(()=>app.context().pages().find(p=>p.url().includes("/src/index.html")),"Installed SDK workspace");await tool.getByLabel("Document",{exact:true}).fill(marker);await tool.getByRole("button",{name:"Save document",exact:true}).click();await expect(tool.getByRole("status")).toHaveText("Saved on this device.");
+  const tool=await waitFor(()=>app.context().pages().find(p=>p.url().includes("/src/index.html")),"Installed SDK workspace");
+  const setup=tool.getByRole("dialog",{name:"Upgrade document setup",exact:true});await setup.waitFor();
+  for(let index=0;index<2;index++){await setup.getByRole("checkbox").check();await setup.getByRole("button",{name:"Continue",exact:true}).click();}
+  await setup.getByRole("button",{name:"Finish setup",exact:true}).click();await setup.waitFor({state:"hidden"});
+  await tool.getByLabel("Document",{exact:true}).fill(marker);await tool.getByRole("button",{name:"Save document",exact:true}).click();await expect(tool.getByRole("status")).toHaveText("Saved on this device.");
   await page.getByRole("button",{name:"MatiQ Solutions home",exact:true}).click();await page.evaluate(()=>window.solutions.request("settings",{autoUpdates:false}));
   const document=path.join(profile,"tools",manifest.id,"document.txt"),registry=path.join(profile,"tool-store/installed.json"),before={document:await hash(document),registry:await hash(registry),package:await hash(archive)};
   await app.evaluate((_,url)=>{const updater=process.mainModule.require("electron-updater").autoUpdater;updater.setFeedURL({provider:"generic",url});updater.disableDifferentialDownload=true;},`http://127.0.0.1:${port}/`);
