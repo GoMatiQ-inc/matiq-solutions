@@ -14,7 +14,7 @@ window.matiqSetupPreview = function ({id, name, steps}) {
   const dialog = node('dialog'); dialog.className = 'matiq-setup-preview'; dialog.setAttribute('aria-label', name + ' setup');
   const resume = button('Resume ' + name + ' setup', () => { dialog.showModal(); draw(); }); resume.className = 'matiq-setup-resume'; resume.hidden = true;
   document.body.append(dialog, resume);
-  dialog.addEventListener('cancel', event => event.preventDefault());
+  dialog.addEventListener('close', () => { if (!state.complete) { resume.hidden = false; if (workspace) workspace.inert = true; } });
   const workspace = document.querySelector('main');
   const saved = (step) => state.values[step.id] ?? '';
   function draw() {
