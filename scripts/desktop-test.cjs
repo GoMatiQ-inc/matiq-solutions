@@ -27,6 +27,10 @@ const {
       id: "com.matiq.fixture",
       name: "Local document",
     });
+    async function stageShared(directory) {
+      for(const name of ['runtime','shell']) await fs.cp(path.join(__dirname,'../packages',name),path.join(directory,'node_modules/@matiq-solutions',name),{recursive:true,filter:file=>!file.split(path.sep).includes('node_modules')});
+    }
+    await stageShared(source);
     const adapterFile = path.join(source, "src/tool.cjs");
     let adapter = await fs.readFile(adapterFile, "utf8");
     adapter = adapter.replace(
@@ -41,7 +45,7 @@ const {
       "status:async()=>{const current=",
       "status:async()=>{if(globalThis.fixtureBrokenStatus)throw Error('Fixture renderer unavailable');if(recording)return {busy:true,reason:'recording fixture audio'};const current=",
     );
-    adapter=adapter.replace("dispose:async()=>{}","dispose:async()=>{if(globalThis.fixtureFailDispose){globalThis.fixtureFailDispose=false;throw Error('Fixture helper still stopping');}}");
+    adapter=adapter.replace("dispose:async()=>{await setup.idle();}","dispose:async()=>{if(globalThis.fixtureFailDispose){globalThis.fixtureFailDispose=false;throw Error('Fixture helper still stopping');}await setup.idle();}");
     await fs.writeFile(adapterFile, adapter);
     const htmlFile=path.join(source,'src/index.html');
     await fs.writeFile(htmlFile,(await fs.readFile(htmlFile,'utf8')).replace('<h2>Settings</h2><p>This tool has no additional settings.</p>','<h2>Fixture preferences</h2><label>Display label<input aria-label="Display label"></label>'));
@@ -56,7 +60,7 @@ const {
           manifest: { ...manifest, version },
           publisher: "fixture",
           privateKey: keys.privateKey,
-          include: ["src"],
+          include: ["src", "node_modules"],
           output: file,
         });
       const url = "https://fixture.invalid/" + version;
@@ -67,8 +71,8 @@ const {
         packages: { [process.platform + "-" + process.arch]: { url, ...meta } },
       });
     }
-    const secondSource=path.join(root,"second-independent-tool-repository"),secondManifest=await create(secondSource,{id:"com.matiq.fixture-second",name:"Other document"}),secondEntries=[];
-    for(const version of ["0.1.0","0.1.1"]){const file=path.join(root,"second-"+version+".mqt"),meta=await pack({root:secondSource,manifest:{...secondManifest,version},publisher:"fixture",privateKey:keys.privateKey,include:["src"],output:file}),url="https://fixture.invalid/second-"+version;packages[url]=file;secondEntries.push({...secondManifest,version,packages:{[process.platform+"-"+process.arch]:{url,...meta}}});}
+    const secondSource=path.join(root,"second-independent-tool-repository"),secondManifest=await create(secondSource,{id:"com.matiq.fixture-second",name:"Other document"}),secondEntries=[];await stageShared(secondSource);
+    for(const version of ["0.1.0","0.1.1"]){const file=path.join(root,"second-"+version+".mqt"),meta=await pack({root:secondSource,manifest:{...secondManifest,version},publisher:"fixture",privateKey:keys.privateKey,include:["src","node_modules"],output:file}),url="https://fixture.invalid/second-"+version;packages[url]=file;secondEntries.push({...secondManifest,version,packages:{[process.platform+"-"+process.arch]:{url,...meta}}});}
     const configFile = path.join(root, "fixture.json");
     const config = {
       profile: path.join(root, "profile"),
@@ -88,10 +92,10 @@ const {
       owned = captureTree(capture(app.process()));
       app
         .context()
-        .on("page", (p) =>
-          p.on("pageerror", (error) =>
-            console.error("Fixture renderer error:", error.message),
-          ),
+        .on("page", (p) => {
+          p.on("pageerror", error => console.error("Fixture renderer error:", error.message));
+          p.on("console", message => {if(message.type()==='error')console.error('Fixture browser error:',message.text());});
+          },
         );
       const page = await app.firstWindow();
       page.setDefaultTimeout(15000);
@@ -101,6 +105,15 @@ const {
       const state=await page.evaluate(()=>window.solutions.request("state")),signed={schema:1,sequence:Math.max(state.catalog.sequence,state.settings.catalogSequence||0)+1,expires:new Date(Date.now()+86400000).toISOString(),tools},envelope={signed,publisher:"fixture",signature:sign(signed,keys.privateKey)};
       await app.evaluate((_,envelope)=>{globalThis.fetch=async()=>new Response(JSON.stringify(envelope),{status:200});},envelope);
       await page.evaluate(()=>window.solutions.request("catalog.refresh"));
+    }
+    async function finishSetup(workspace) {
+      const wizard=workspace.getByRole('dialog');
+      await wizard.waitFor({state:'visible'});
+      for(const label of ['I reviewed local storage and sharing.','I reviewed this tool’s settings.']) {
+        await workspace.getByRole('checkbox',{name:label,exact:true}).check();
+        await workspace.getByRole('button',{name:'Continue',exact:true}).click();
+      }
+      await workspace.getByRole('button',{name:'Finish setup',exact:true}).click();
     }
     async function close() {
       if (!app) return;
@@ -168,6 +181,7 @@ const {
       await new Promise((r) => setTimeout(r, 50));
     }
     assert.ok(tool, "Installed tool workspace must be a live isolated page.");
+    await finishSetup(tool);
     await page.getByRole('navigation',{name:'Local document navigation'}).getByRole('button',{name:'Document',exact:true}).waitFor();
     assert.equal(await tool.locator('.sidebar').isVisible(),false);
     await page.getByRole('button',{name:'Open app launcher'}).click();
@@ -401,6 +415,7 @@ const {
     await close();
     config.root=source;config.profile=path.join(root,"standalone-profile");
     page=await launch("standalone-entry.cjs");
+    await finishSetup(page);
     await page.getByLabel("Document",{exact:true}).fill("Saved from the SDK standalone host.");
     await page.getByRole("button",{name:"Save document"}).click();
     await page.getByText("Saved on this device.",{exact:true}).waitFor();
@@ -418,6 +433,38 @@ const {
     assert.equal(await fs.readFile(path.join(config.profile,"document.txt"),"utf8"),"An edit arriving during the close check.");
     await close();
     console.log("PASS: SDK standalone saves locally and refuses a final edit arriving during shutdown.");
+    async function recordingQuit(form) {
+      const savedRecording=path.join(root,'quit-'+form+'.txt');
+      for(let i=0;i<100;i++){if(await app.evaluate((_,form)=>form==='standalone'?Boolean(globalThis.fixtureStandalone):Boolean(globalThis.fixtureSuite?.host.running.size),form))break;await new Promise(resolve=>setTimeout(resolve,20));}
+      await app.evaluate(({dialog},input)=>{
+        const instance=input.form==='standalone'?globalThis.fixtureStandalone.instance:[...globalThis.fixtureSuite.host.running.values()][0].instance;
+        const fs=globalThis.fixtureFileSystem;globalThis.fixtureRecording=true;globalThis.fixtureQuitChoice=0;globalThis.fixtureQuitPrompts=[];globalThis.fixtureCloseError='';globalThis.fixtureFailSave=false;
+        instance.status=async()=>({busy:globalThis.fixtureRecording,recording:globalThis.fixtureRecording,reason:'recording controlled fixture'});
+        instance.stopAndSave=async()=>{if(globalThis.fixtureFailSave)throw Error('Controlled save failure: keep the app open.');await new Promise(resolve=>setTimeout(resolve,100));await fs.writeFile(input.file+'.tmp','Recorded fixture buffers saved before exit.');await fs.rename(input.file+'.tmp',input.file);globalThis.fixtureRecording=false;};
+        dialog.showMessageBox=async(_parent,options)=>{globalThis.fixtureQuitPrompts.push(options);return {response:globalThis.fixtureQuitChoice};};
+        dialog.showErrorBox=(_title,detail)=>{globalThis.fixtureCloseError=detail;};
+      },{form,file:savedRecording});
+      await app.evaluate(({app})=>{setImmediate(()=>app.quit());});
+      for(let i=0;i<100;i++){if(await app.evaluate(()=>globalThis.fixtureQuitPrompts.length))break;await new Promise(resolve=>setTimeout(resolve,20));}
+      assert.equal(await app.evaluate(()=>globalThis.fixtureRecording),true);assert.equal(app.process().exitCode,null);
+      assert.deepEqual(await app.evaluate(()=>globalThis.fixtureQuitPrompts[0].buttons),['Keep recording','Stop, save, and quit']);
+      await app.evaluate(({app})=>{globalThis.fixtureQuitChoice=1;globalThis.fixtureFailSave=true;setImmediate(()=>app.quit());});
+      for(let i=0;i<100;i++){if(await app.evaluate(()=>globalThis.fixtureCloseError))break;await new Promise(resolve=>setTimeout(resolve,20));}
+      assert.match(await app.evaluate(()=>globalThis.fixtureCloseError),/Controlled save failure/);assert.equal(app.process().exitCode,null);assert.equal(await app.evaluate(()=>globalThis.fixtureRecording),true);
+      owned=captureTree(capture(app.process()));const exited=new Promise(resolve=>app.process().once('exit',resolve));
+      await app.evaluate(({app})=>{globalThis.fixtureFailSave=false;setImmediate(()=>app.quit());});await exited;
+      assert.equal(await fs.readFile(savedRecording,'utf8'),'Recorded fixture buffers saved before exit.');
+      for(const process of owned)await verifyStopped(process);app=null;owned=[];
+      console.log('PASS: '+form+' Quit warns, cancellation preserves recording, save failure prevents exit, and confirmed Quit awaits saved data.');
+    }
+    page=await launch('standalone-entry.cjs');await recordingQuit('standalone');
+    config.profile=path.join(root,'quit-suite-profile');config.catalog.tools=[entries[0]];
+    page=await launch();await menuPage('Marketplace');await page.getByRole('button',{name:'Local document',exact:true}).click();
+    await page.getByRole('button',{name:'Install',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Install',exact:true}).click();await page.getByText('Local document installed. Choose Open.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Open',exact:true}).click();
+    await page.evaluate(()=>window.solutions.request('open',{id:'com.matiq.fixture'}));
+    await recordingQuit('suite');
+
   } catch (error) {
     if (app) {
       try {

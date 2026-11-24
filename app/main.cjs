@@ -499,17 +499,22 @@ async function launch(options = {}) {
   });
 
   app.on("window-all-closed", () => app.quit());
+  let checkingQuit = false;
   app.on("before-quit", (event) => {
     if (quitting) return;
     event.preventDefault();
+    if (checkingQuit) return;
+    checkingQuit = true;
     (async () => {
+      if (!await host.prepareQuit()) return;
       await prepareExit();
       quitting = true;
       app.quit();
     })().catch((e) => {
       announce(e.message);
       if (!window.isDestroyed()) window.show();
-    });
+      dialog.showErrorBox("MatiQ Solutions could not quit", e.message);
+    }).finally(() => { checkingQuit = false; });
   });
   await window.loadURL(uiURL);
   let timer, initialCheck;

@@ -1,3 +1,4 @@
+require("electron").dialog.showErrorBox=(_title,message)=>{globalThis.fixtureCloseError=message;};
 globalThis.fixtureShell = require("@matiq-solutions/shell");
 const fs = require("node:fs/promises");
 globalThis.fixtureFileSystem=fs;

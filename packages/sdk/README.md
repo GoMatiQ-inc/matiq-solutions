@@ -98,3 +98,17 @@ valid configuration. This flow requires prototype review before production UI
 implementation. `setup-preview.js` is a shared design-only helper for that review;
 it never downloads models or changes OS permissions. Tool step definitions remain
 in each tool repository.
+
+SDK 0.1.7 scaffolds production setup with `runtime/setup.cjs` and
+`shell/setup.mjs`. Keep the step definitions in the tool repository, pass
+them over the trusted native bridge, and run real verification in the backend.
+Use `assertReady()` on normal tool operations; persist choices/checks before
+advancing. Invalidate affected checks when prerequisites change.
+
+Recording tools must report `status().recording` (including paused sessions)
+and implement `stopAndSave()`. Quit offers **Keep recording** or
+**Stop, save, and quit**. The latter must stop capture, drain pending delivery,
+save captured work, and resolve only after successful persistence. Throw on any
+failure and retain retryable data. Never dispose an active recorder simply
+because Quit was requested. Native setup denial must remain safely quittable.
+Qualify cancellation, successful save/exit, and failed save/no exit in both forms.

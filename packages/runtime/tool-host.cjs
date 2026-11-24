@@ -1,4 +1,4 @@
-const { app, WebContentsView, session, ipcMain } = require("electron");
+const { app, WebContentsView, session, ipcMain, dialog } = require("electron");
 const fs = require("node:fs/promises"),
   path = require("node:path");
 const { frameGuard } = require("./trusted-frame.cjs");
@@ -385,6 +385,18 @@ class ToolHost {
       await this.unfreeze(t);
       throw error;
     }
+  }
+  async prepareQuit() {
+    return require('./quit-recordings.cjs').stopRecordingsForQuit({
+      tools: [...this.running.values()].filter(tool => !tool.activationFailed).map(tool => ({
+        name: tool.name, status: () => tool.instance.status(),
+        ...(typeof tool.instance.stopAndSave === 'function' ? {stopAndSave: async () => {
+          await this.freeze(tool);
+          try { await tool.instance.stopAndSave(); } finally { await this.unfreeze(tool); }
+        }} : {})
+      })),
+      confirm: options => dialog.showMessageBox(this.window, options)
+    });
   }
   async dispose() {
     if (this.disposing || this.closing.size)
