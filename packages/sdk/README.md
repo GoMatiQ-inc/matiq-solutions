@@ -83,3 +83,18 @@ Paste [NEW_TOOL_PROMPT.md](NEW_TOOL_PROMPT.md), then append the tool brief witho
 The suite owns the compact top bar, installed-app launcher and unified Solutions Settings tabs. Tool names in that bar omit the MatiQ prefix. Keep native page buttons inside `.sidebar nav`; the suite connects those existing controls to its top bar. Mark non-sidebar controls with `data-matiq-nav`. Mark the tool’s settings control `data-matiq-settings` (existing `data-page="settings"`, `#settings-nav` and Settings-labelled sidebar buttons remain compatible). Page buttons should reflect selection with `.active` or `aria-current="page"`. Do not create a second tool UI or replace its narrow IPC API. The shell’s `navigation.cjs` validates navigation indices and invokes only existing controls. Hosted gear navigation opens the real settings page inside the tool’s Solutions Settings section. Tools without settings receive an explicit empty state. Standalone shell behavior stays available for independent use.
 
 SDK 0.1.5 also adds the generated-output and local-registration ignore rules automatically for new and initialized tools, and protects the suite’s local checkout map. Existing approved source and prototype bridges are not overwritten. Use the same explicit shared-shell path when building/checking an existing tool against a different installed shell version. CI packaging must restore the matching registered suite checkout before checking an existing approval; never synthesize an owner approval in CI.
+
+### First-run setup requirement
+
+A newly installed tool opens into mandatory setup in both forms. Review every
+settings section, verify required resources and selected capabilities, and record
+explicit choices or skips for optional settings/accounts. Persist progress and
+resume after permission-related restarts. In suite mode identify MatiQ Solutions
+as the host; never instruct users to grant the standalone app instead. Permission
+denial must not create a live/paused capture or prevent safe shutdown. A closed
+wizard is incomplete; native commands must enforce readiness, not just the UI.
+Existing users should review only new or invalid prerequisites rather than lose
+valid configuration. This flow requires prototype review before production UI
+implementation. `setup-preview.js` is a shared design-only helper for that review;
+it never downloads models or changes OS permissions. Tool step definitions remain
+in each tool repository.

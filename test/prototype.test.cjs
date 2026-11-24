@@ -255,3 +255,16 @@ test("new tool scaffolds keep generated output and local registration out of Git
     /prototype\/tools\.local\.json/,
   );
 });
+
+test("exports shared setup preview scripts into both the suite and tool shell without copying native code", async (t) => {
+  const f = await fixture(t);
+  const script = "window.matiqSetupPreview = () => {};";
+  await fs.writeFile(path.join(f.shell, "setup-preview.js"), script);
+  await fs.writeFile(path.join(f.shell, "native-helper.cjs"), "throw Error('Native code must stay out of previews');");
+  await p.init(f.tool, {suite: f.suite});
+  await p.buildSuite(f.suite, {shell: f.shell});
+  for (const directory of [path.join(f.suite, ".prototype/.matiq-shell"), path.join(f.suite, ".prototype/tools/com.matiq.test/.matiq-shell")]) {
+    assert.equal(await fs.readFile(path.join(directory, "setup-preview.js"), "utf8"), script);
+    await assert.rejects(fs.access(path.join(directory, "native-helper.cjs")), {code: "ENOENT"});
+  }
+});
