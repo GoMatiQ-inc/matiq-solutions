@@ -68,8 +68,8 @@ function solutionsPrototype(root) {
   root.replaceChildren();
   const bar = n("div", undefined, "mq-reviewbar");
   bar.append(
-    n("strong", "UI prototype · v7"),
-    n("span", "Compact navigation & settings · Prototype only"),
+    n("strong", "UI prototype"),
+    n("span", "Shared shell & first-run setup · Prototype only"),
     b("Feedback" + (entries.length ? " · " + entries.length : ""), () => {
       s.review = !s.review;
       draw();

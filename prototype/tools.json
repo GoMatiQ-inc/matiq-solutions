@@ -8,6 +8,12 @@
       "manifest": "prototype/manifest.json"
     },
     {
+      "id": "com.matiq.guides",
+      "name": "Copycat",
+      "repository": "https://github.com/GoMatiQ-inc/matiq-copycat",
+      "manifest": "prototype/manifest.json"
+    },
+    {
       "id": "com.matiq.schema",
       "name": "DBSchema",
       "repository": "https://github.com/GoMatiQ-inc/matiq-schema",

@@ -289,7 +289,7 @@ async function build(
     );
   }
   await copyTree(shared, path.join(output, ".matiq-shell"), (f) =>
-    /\.(?:css|png|svg|woff2?|txt)$/.test(f),
+    /\.(?:css|js|png|svg|woff2?|txt)$/.test(f),
   );
   const bridge = inside(root, c.bridge);
   await fs.mkdir(path.dirname(inside(output, c.bridge)), { recursive: true });
@@ -359,7 +359,7 @@ async function buildSuite(
     /\.(?:html|css|js)$/.test(f),
   );
   await copyTree(shared, path.join(output, ".matiq-shell"), (f) =>
-    /\.(?:css|png|svg|woff2?|txt)$/.test(f),
+    /\.(?:css|js|png|svg|woff2?|txt)$/.test(f),
   );
   const catalog = await read(path.join(suite, "prototype/tools.json")),
     local = await read(path.join(suite, "prototype/tools.local.json")).catch(
