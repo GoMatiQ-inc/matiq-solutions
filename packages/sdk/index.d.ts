@@ -6,10 +6,12 @@ export interface ToolManifest {
   capabilities: Array<"microphone" | "system-audio" | "keyboard" | "clipboard" | "files" | "network" | "computer">;
   adapter: string; workspace: string; preload: string;
 }
-export interface ToolStatus { busy: boolean; reason?: string; background?: boolean }
+export interface ToolStatus {
+  recording?: boolean; busy: boolean; reason?: string; background?: boolean }
 export interface ToolInstance {
   status(): Promise<ToolStatus>;
   dispose(): Promise<void>;
+  stopAndSave?(): Promise<void>;
   onVisibility?(visible: boolean): void;
 }
 export interface ToolHostContext {

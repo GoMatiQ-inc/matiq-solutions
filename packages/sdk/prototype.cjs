@@ -120,7 +120,7 @@ async function init(root, { bridge, suite } = {}) {
     await fs.mkdir(path.dirname(inside(root, c.bridge)), { recursive: true });
     await fs.writeFile(
       inside(root, c.bridge),
-      "// Prototype-only desktop bridge. Implement sample state here; never call native APIs.\nwindow.tool={request:async(name,value)=>{if(name==='load')return '';if(name==='save')return true;throw Error('Prototype command is not implemented: '+name);}};\n",
+      "// Prototype-only desktop bridge. Implement sample state here; never call native APIs.\nconst previewSetup={schema:1,completed:false,step:0,values:{},steps:" + JSON.stringify(await read(path.join(root,"src/setup-steps.json")).catch(()=>[])) + "};window.tool={request:async(name,value)=>{if(name==='setup'){if(value.command==='review')previewSetup.values[value.id]=value.value;else if(value.command==='progress')previewSetup.step=value.step;else if(value.command==='complete')previewSetup.completed=true;else if(value.command==='reopen'){previewSetup.completed=false;previewSetup.step=0;}return structuredClone(previewSetup);}if(!previewSetup.completed)throw Error('Complete setup before using this tool.');if(name==='load')return '';if(name==='save')return true;throw Error('Prototype command is not implemented: '+name);}};\n",
     );
   }
   if (!(await exists(path.join(root, "prototype/approval.json"))))
@@ -289,7 +289,7 @@ async function build(
     );
   }
   await copyTree(shared, path.join(output, ".matiq-shell"), (f) =>
-    /\.(?:css|js|png|svg|woff2?|txt)$/.test(f),
+    /\.(?:css|js|mjs|png|svg|woff2?|txt)$/.test(f),
   );
   const bridge = inside(root, c.bridge);
   await fs.mkdir(path.dirname(inside(output, c.bridge)), { recursive: true });
@@ -297,6 +297,12 @@ async function build(
   for (const [target, source] of Object.entries(c.overrides || {})) {
     await fs.mkdir(path.dirname(inside(output, target)), { recursive: true });
     await fs.copyFile(inside(root, source), inside(output, target));
+  }
+  for (const filename of await files(output)) {
+    if (!/\.(?:js|mjs)$/.test(filename) || filename.includes(path.sep + '.matiq-shell' + path.sep)) continue;
+    const text = await fs.readFile(filename, 'utf8');
+    const relative = path.relative(path.dirname(filename), path.join(output, '.matiq-shell')).split(path.sep).join('/') + '/';
+    await fs.writeFile(filename, text.replace(/(?:\.\.\/)+node_modules\/@matiq-solutions\/shell\//g, relative));
   }
   const htmlFile = inside(output, c.workspace);
   let html = await fs.readFile(htmlFile, "utf8");
@@ -359,7 +365,7 @@ async function buildSuite(
     /\.(?:html|css|js)$/.test(f),
   );
   await copyTree(shared, path.join(output, ".matiq-shell"), (f) =>
-    /\.(?:css|js|png|svg|woff2?|txt)$/.test(f),
+    /\.(?:css|js|mjs|png|svg|woff2?|txt)$/.test(f),
   );
   const catalog = await read(path.join(suite, "prototype/tools.json")),
     local = await read(path.join(suite, "prototype/tools.local.json")).catch(

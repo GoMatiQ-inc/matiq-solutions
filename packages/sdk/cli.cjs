@@ -87,29 +87,51 @@ async function create(
       "const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('tool',{request:(name,args)=>ipcRenderer.invoke('" +
       id +
       ":request',name,args)});\n",
+    "src/setup-steps.json": JSON.stringify([
+      {id:"storage",kind:"review",title:"Your files stay local",body:"Documents are saved on this device. Imports, exports and sharing happen only when you choose.",label:"I reviewed local storage and sharing."},
+      {id:"settings",kind:"review",title:"Review settings",body:"This tool saves a local document and has no additional permissions, models or accounts to configure.",label:"I reviewed this tool’s settings."},
+      {id:"ready",kind:"summary",title:"Ready to use",body:"Setup is complete. You can review these settings later."}
+    ],null,2)+"\n",
     "src/tool.cjs": `const fs=require('node:fs/promises'),path=require('node:path');
+const {createSetup}=require('@matiq-solutions/runtime/setup.cjs');
 exports.activate=async host=>{
  const file=path.join(host.dataDir,'document.txt');let savedText='',saving=false;
+ const setup=createSetup({file:path.join(host.dataDir,'setup.json'),steps:require('./setup-steps.json')});
  host.handle('${id}:request',async(name,text)=>{
+  if(name==='setup'){
+   if(!text||typeof text!=='object')throw Error('Choose a setup action.');
+   if(text.command==='state')return {...await setup.read(),steps:require('./setup-steps.json')};
+   if(text.command==='review')return setup.review(text.id,text.value);
+   if(text.command==='progress')return setup.progress(text.step);
+   if(text.command==='complete')return setup.complete();
+   if(text.command==='reopen')return setup.reopen();
+   throw Error('Unknown setup action.');
+  }
+  await setup.assertReady();
   if(name==='load'){try{savedText=await fs.readFile(file,'utf8');return savedText;}catch(e){if(e.code==='ENOENT')return '';throw e;}}
   if(name==='save'){
    if(typeof text!=='string'||text.length>1000000)throw Error('Keep the document under one million characters.');
-   if(saving)throw Error('Wait for the current save.');
-   saving=true;
+   if(saving)throw Error('Wait for the current save.');saving=true;
    try{const tmp=file+'.tmp';await fs.writeFile(tmp,text,{mode:0o600});await fs.rename(tmp,file);savedText=text;return true;}finally{saving=false;}
   }
   throw Error('Unknown tool command.');
  });
  await host.view.webContents.loadFile(path.join(host.resourceDir,'src/index.html'));
- return {status:async()=>{const current=await host.view.webContents.executeJavaScript("document.querySelector('textarea').value");return {busy:saving||current!==savedText,reason:saving?'saving document':current!==savedText?'save your document first':''};},dispose:async()=>{}};
+ return {status:async()=>{const current=await host.view.webContents.executeJavaScript("document.querySelector('textarea').value");return {busy:saving||current!==savedText,reason:saving?'saving document':current!==savedText?'save your document first':''};},dispose:async()=>{await setup.idle();}};
 };`,
     "src/index.html":
-      '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\'; connect-src \'none\'; object-src \'none\'; base-uri \'none\'"><title>' + title + '</title><link rel="stylesheet" href="style.css"></head><body><aside class="sidebar"><div class="brand"><img src="../node_modules/@matiq-solutions/shell/assets/matiq-solutions-wordmark-dark.png" alt="MatiQ Solutions"><span>' + title + '</span></div><nav aria-label="Main navigation"><button class="active" aria-current="page" data-matiq-nav>Document</button><button data-matiq-settings>Settings</button></nav><div class="sidebar-foot"><strong>On your device</strong><span>Your files stay local.</span></div></aside><div class="workspace"><header><h1>Document</h1></header><main><section id="page-document"><h2>Your local workspace.</h2><p>A tool in its own repository. Your document stays on this device.</p><textarea aria-label="Document"></textarea><button id="save">Save document</button><p id="status" role="status"></p></section><section id="page-settings" hidden><h2>Settings</h2><p>This tool has no additional settings.</p></section></main><footer>By MatiQ Solutions<span>Your work. Your device.</span></footer></div><script src="app.js"></script></body></html>',
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\'; connect-src \'none\'; object-src \'none\'; base-uri \'none\'"><title>' + title + '</title><link rel="stylesheet" href="style.css"></head><body><aside class="sidebar"><div class="brand"><img src="../node_modules/@matiq-solutions/shell/assets/matiq-solutions-wordmark-dark.png" alt="MatiQ Solutions"><span>' + title + '</span></div><nav aria-label="Main navigation"><button class="active" aria-current="page" data-matiq-nav>Document</button><button data-matiq-settings>Settings</button></nav><div class="sidebar-foot"><strong>On your device</strong><span>Your files stay local.</span></div></aside><div class="workspace"><header><h1>Document</h1></header><main><section id="page-document"><h2>Your local workspace.</h2><p>A tool in its own repository. Your document stays on this device.</p><textarea aria-label="Document"></textarea><button id="save">Save document</button><p id="status" role="status"></p></section><section id="page-settings" hidden><h2>Settings</h2><p>This tool has no additional settings.</p><button id="review-setup">Review setup</button></section></main><footer>By MatiQ Solutions<span>Your work. Your device.</span></footer></div><script type="module" src="app.js"></script></body></html>',
     "src/style.css":
       "textarea{display:block;width:100%;height:260px;margin:24px 0;font:inherit}button{font:inherit;padding:10px 18px}",
-    "src/app.js": `const text=document.querySelector('textarea'),status=document.querySelector('#status'),save=document.querySelector('#save');
+    "src/app.js": `import {mountSetup} from '../node_modules/@matiq-solutions/shell/setup.mjs';
+const text=document.querySelector('textarea'),status=document.querySelector('#status'),save=document.querySelector('#save');
 text.disabled=true;save.disabled=true;
-window.tool.request('load').then(value=>{text.value=value;text.disabled=false;save.disabled=false;}).catch(e=>status.textContent='Document could not be loaded. Reopen the tool before editing: '+e.message);
+const loadDocument=async()=>{text.value=await window.tool.request('load');text.disabled=false;save.disabled=false;};
+const flow=(command,args={})=>window.tool.request('setup',{command,...args});
+const definition=await flow('state');
+const setup=await mountSetup({name:document.title,steps:definition.steps,api:{read:()=>flow('state'),review:(id,value)=>flow('review',{id,value}),progress:step=>flow('progress',{step}),complete:()=>flow('complete'),reopen:()=>flow('reopen')},onComplete:loadDocument});
+if(setup.isComplete())await loadDocument();
+document.querySelector('#review-setup').onclick=()=>setup.open().catch(e=>status.textContent=e.message);
 text.oninput=()=>status.textContent='Unsaved changes';
 for(const b of document.querySelectorAll('.sidebar nav button'))b.onclick=()=>{const settings=b.hasAttribute('data-matiq-settings');document.querySelector('#page-document').hidden=settings;document.querySelector('#page-settings').hidden=!settings;for(const item of document.querySelectorAll('.sidebar nav button')){item.classList.toggle('active',item===b);item.setAttribute('aria-current',item===b?'page':'false');}};
 save.onclick=async()=>{save.disabled=true;const snapshot=text.value;try{await window.tool.request('save',snapshot);status.textContent=text.value===snapshot?'Saved on this device.':'Unsaved changes';}catch(e){status.textContent=e.message;}finally{save.disabled=false;}};

@@ -1,6 +1,6 @@
 {
   "name": "@matiq-solutions/runtime",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "main": "index.cjs",
   "license": "SEE LICENSE IN LICENSE",
   "files": [
@@ -12,8 +12,8 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@matiq-solutions/sdk": "0.1.6",
-    "@matiq-solutions/shell": "0.1.6"
+    "@matiq-solutions/sdk": "0.1.7",
+    "@matiq-solutions/shell": "0.1.7"
   },
   "engines": {
     "node": ">=22.12.0"

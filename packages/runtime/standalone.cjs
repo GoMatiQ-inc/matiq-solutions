@@ -49,6 +49,8 @@ async function launch({ root, profile }) {
       finally{clearTimeout(timer);}
       if(requests.size)throw Error("Wait for the current request to finish before quitting.");
       if(!activationFailed){
+        const proceed = await require('./quit-recordings.cjs').stopRecordingsForQuit({tools:[{name:manifest.name,status:()=>instance.status(),...(typeof instance.stopAndSave==='function'?{stopAndSave:()=>instance.stopAndSave()}:{})}],confirm:options=>dialog.showMessageBox(window,options)});
+        if(!proceed)return;
         const initial=await instance.status();if(initial.busy)throw Error(initial.reason||"Finish your work before quitting.");
         frozen=await contents.executeJavaScript("(()=>{const previous=document.documentElement.inert;document.documentElement.inert=true;return previous;})()");
         const final=await instance.status();if(final.busy)throw Error(final.reason||"Finish your work before quitting.");

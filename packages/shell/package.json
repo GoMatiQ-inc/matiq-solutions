@@ -1,6 +1,6 @@
 {
   "name": "@matiq-solutions/shell",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "main": "index.cjs",
   "license": "SEE LICENSE IN LICENSE",
   "files": [
@@ -10,7 +10,8 @@
     "assets",
     "templates",
     "LICENSE",
-    "*.js"
+    "*.js",
+    "*.mjs"
   ],
   "dependencies": {},
   "engines": {
