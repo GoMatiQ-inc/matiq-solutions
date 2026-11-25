@@ -1,15 +1,15 @@
 {
   "signed": {
     "schema": 1,
-    "sequence": 1795567366114,
-    "expires": "2026-12-02T00:42:46.114Z",
+    "sequence": 1795570701791,
+    "expires": "2026-12-02T01:38:21.791Z",
     "tools": [
       {
         "schema": 1,
         "id": "com.matiq.voice",
         "name": "MatiQ Voice",
         "description": "Local dictation and meeting notes, with speech kept on your device.",
-        "version": "0.3.14",
+        "version": "0.3.15",
         "capabilities": [
           "microphone",
           "system-audio",
@@ -26,9 +26,9 @@
         ],
         "packages": {
           "darwin-arm64": {
-            "url": "https://github.com/GoMatiQ-inc/matiq-voice/releases/download/v0.3.14/MatiQ-Voice-0.3.14-darwin-arm64.mqt",
-            "bytes": 14682578,
-            "sha256": "b32ccaec1e49b1df5d890e247eeaf24d22fd02ad0d6560ba39167cd457f25145"
+            "url": "https://github.com/GoMatiQ-inc/matiq-voice/releases/download/v0.3.15/MatiQ-Voice-0.3.15-darwin-arm64.mqt",
+            "bytes": 14719558,
+            "sha256": "1f5a5648ee35661c22d637b4dab1ff1d65e462480b67d62871b2d91518f11f63"
           }
         },
         "source": "https://github.com/GoMatiQ-inc/matiq-voice",
@@ -121,5 +121,5 @@
     ]
   },
   "publisher": "matiq-solutions-release-v1",
-  "signature": "Q4NMdUk+PMn2gvXHvzGZQtj30gDZ37FI2IVGyrYHTlMUpjVIleiF2PHWz+Zmmzq1Ctvo9944roFcyi4rTCxvAw=="
+  "signature": "fahMh+sVPTfY8bYhn2JyzJYc7FsZEDAPYWspJFeN5r6RMP48yUuTWPUGKEem+mdyn27Ig0qA6GFYiN5nJfCtAQ=="
 }
